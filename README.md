@@ -10,7 +10,7 @@ A self-improving **paper trading** bot for US ETFs. It evolves its own trading s
 
 ## Highlights
 
-- **Genetic programming** over entry and exit rule trees, scored across 10 ETFs at once so that rules must generalise.
+- **Genetic programming** over entry and exit rule trees, scored across 10 ETFs at once so that rules must generalise, with a recorded family tree of every strategy it creates ([watch it evolve](#watch-it-evolve)).
 - **Walk-forward evaluation** (2016 to today, five 2-year test windows), repeated over **5 random seeds**, with the spread reported rather than the best run.
 - **Purged, walk-forward ML signal** (gradient boosting). It is honestly reported as a coin flip, with AUC around 0.51.
 - **Self-learning paper account.**
@@ -18,7 +18,7 @@ A self-improving **paper trading** bot for US ETFs. It evolves its own trading s
   - It analyses its losing trades for patterns and re-evolves quarterly.
   - It swaps strategies only on held-out evidence.
 - **Leakage tests.** Tests scramble future prices and assert that no past decision, ML prediction or account entry changes. A live-only leak (Yahoo's partial intraday bar) was found and fixed.
-- **Tooling.** 42 offline tests, CI on Python 3.12 and 3.13, a Streamlit dashboard, and a reproducible `uv` environment.
+- **Tooling.** 64 offline tests, CI on Python 3.12 and 3.13, a Streamlit dashboard, and a reproducible `uv` environment.
 
 ## Roadmap
 
@@ -41,6 +41,27 @@ ENTRY (rsi(2) < 15.0 AND trend(200) > 0.010) | EXIT rsi(2) > 70.0
 - **Fitness.** Scored across the whole universe at once: mean Sharpe, minus a penalty for inconsistency between tickers, rule complexity, and barely trading. This rewards rules that generalise rather than ones that fit a single lucky chart.
 - **Selection.** The GA trains on the first 75% of the training window. The champion is picked from the hall of fame on the held-out last 25%.
 - **Walk-forward.** An expanding training window, then 2-year test windows from 2016 to today that the process never sees. Each fold's hall of fame seeds the next fold, so the bot keeps building on what it learned.
+
+### Watch it evolve
+
+Every individual the GA creates is recorded: its parents, exactly how it was made ("threshold nudged", "crossover", "survivor", ...) and its training fitness. Below, each dot is one strategy. The same algorithm is run with two different goals on 2007–2021 data:
+
+![Evolution swarm](docs/img/evolution_swarm.gif)
+
+**Different goals evolve different species.** Chasing *beat buy & hold*, the population rushes from 29% to 98% invested within two generations: evolution discovers that the way not to lose to buy & hold is to hold. Chasing *Sharpe*, it settles at about 70% invested, trading return for smoother returns.
+
+Tracing the final champion's ancestry shows how it was actually built. Evolution is not a straight climb: some mutations made things worse before a later change recovered.
+
+![Family tree](docs/img/family_tree.png)
+
+The dashboard's **Evolution** tab makes all of this interactive:
+- the animated swarm, with play controls and hover to see each rule;
+- the full family tree;
+- the champion's step-by-step story;
+- a gene-pool heatmap of which indicators take over and which die out;
+- the champion's rule drawn as a tree.
+
+*All fitness values here are training fitness, i.e. how the algorithm judges its population, not out-of-sample performance.*
 
 ### The ML signal
 
@@ -145,10 +166,15 @@ uv sync --extra dashboard
 uv run evotrader dashboard
 ```
 
-It has four tabs:
+It has five tabs:
 - **Paper account:** equity and drawdown against buy & hold, open positions and pending orders.
 - **Trade journal:** every trade with filters and the reason it was taken.
 - **Learning:** the active strategy and every re-learning decision.
+- **Evolution:**
+  - the population swarm, animated generation by generation;
+  - the champion's family tree and its step-by-step story;
+  - the gene-pool heatmap and the champion's rule tree;
+  - a switch between the two goals.
 - **Research:** walk-forward curves, the seed robustness study and learning curves.
 
 Charts support hover and follow light or dark mode.
@@ -176,6 +202,7 @@ uv run evotrader paper run                       # trade every day since the las
 uv run evotrader paper status                    # equity, positions, strategy, learning log
 uv run evotrader paper journal                   # closed trades and why they happened
 uv run evotrader walkforward --seeds 5           # robustness across random seeds (~15 min)
+uv run evotrader evolution                       # record evolution runs for the visualiser
 uv run evotrader charts                          # regenerate docs/img
 uv run evotrader experiment --stage dev --summary  # pre-registered experiment results
 ```
@@ -192,7 +219,9 @@ src/evotrader/
   evolution/
     genome.py      # Rule trees, random generation, mutation, crossover
     fitness.py     # Multi-ticker fitness function
-    engine.py      # The genetic algorithm
+    engine.py      # The genetic algorithm (optionally records every individual)
+    history.py     # Evolution logs: family trees, gene pool, rule-tree drawing
+    rotation.py    # ETF rotation genomes (experiment idea 2)
     strategy.py    # Genome -> Strategy adapter, save/load
   walkforward.py   # Fold construction, evaluation, markdown report
   paper/
