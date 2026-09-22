@@ -60,16 +60,37 @@ So this experiment tests a strategy that has both published evidence and a mecha
 
 ## Results
 
-*Filled in after each stage runs. The numbers must come from `reports/experiments3/`.*
+All numbers come from `reports/experiments3/`. CAGR is raw; Sharpe is over T-bills.
 
-### Development
-_pending_
+| Stage | Buy & hold | L1 trend | **L2 trend + 1.5×** | L3 trend + vol target |
+|---|---|---|---|---|
+| **dev** (US, 2007–21) | 10.6% / 0.64 / -43% | 7.6% / 0.75 / -15% | 10.5% / 0.74 / -21% ❌ | 9.3% / 0.75 / -17% |
+| **final-sectors** (never used) | 8.9% / 0.47 / -49% | 4.7% / 0.32 / -27% | 5.4% / 0.30 / -40% ❌ | 5.4% / 0.33 / -27% |
+| **final-countries** (never used) | 9.3% / 0.44 / -64% | 8.1% / 0.57 / -22% | **10.6% / 0.56 / -31%** ✅ | 8.6% / 0.51 / -31% |
+| post-publication (US, not judged) | 14.1% / 0.79 / -30% | 9.7% / 0.80 / -13% | 12.8% / 0.78 / -20% | 11.3% / 0.78 / -14% |
 
-### Final: US sectors (never used)
-_pending_
+*Each cell: CAGR / Sharpe / max drawdown. ✅/❌ = beats buy & hold on both CAGR and Sharpe.*
 
-### Final: countries (never used)
-_pending_
+### Verdict
 
-### Post-publication (not judged)
-_pending_
+**No arm beats buy & hold under the pre-registered rule.**
+- **L2 is closest.** It won on the never-used country ETFs (higher return and Sharpe, with half the drawdown). It missed dev by 0.1 point of CAGR. It lost clearly on the never-used US sectors.
+- **One win out of three stages is not evidence.** Picking the stage where it worked would be cherry-picking.
+
+**What the per-ETF breakdown shows** (diagnosis only; nothing was changed or re-run):
+
+- **The trend filter cut the maximum drawdown on all 18 never-used ETFs,** often dramatically. Korea (EWY) went from -74% to -41%, Denmark (EWK) from -74% to -26%, industrials (XLI) from -62% to -28%.
+- **It lowered return on 13 of 18,** by missing rebounds and whipsawing around the average. The worst case was consumer staples (XLP): 7.4% → 2.2% a year.
+- **Leverage converts lower risk into higher return only where crashes were very deep.** The country basket fell 64% under buy & hold, and sidestepping that more than paid for the missed rebounds. The US sectors, especially defensive ones like staples and utilities, had shallower falls to avoid, so leverage could not recover the lost return.
+- **After the paper was published** (US 2016–26), L2 earned less than buy & hold (12.8% vs 14.1%) at about the same Sharpe. This is consistent with the post-publication decay in the literature.
+
+### What three experiments add up to
+
+Across every approach tested (evolved timing rules, rotation, volatility targeting, trend filters, with and without leverage), one pattern repeats:
+
+1. **Risk reduction is real and robust.** Every defensive rule cut maximum drawdowns substantially on data it had never seen.
+2. **Return enhancement is not.** Turning that lower risk into higher return than buy & hold, through leverage, worked in some markets and periods and failed in others. It never passed a pre-registered test.
+
+That is what the academic literature predicts for publicly known, price-based strategies on liquid markets.
+
+**Trial count after this experiment:** original bot + 3 + 3 + 3 arms (plus V2's 27 settings). One pre-registered pass: experiment 1's arm B, by a negligible margin.

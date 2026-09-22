@@ -18,7 +18,7 @@ A self-improving **paper trading** bot for US ETFs. It evolves its own trading s
   - It analyses its losing trades for patterns and re-evolves quarterly.
   - It swaps strategies only on held-out evidence.
 - **Leakage tests.** Tests scramble future prices and assert that no past decision, ML prediction or account entry changes. A live-only leak (Yahoo's partial intraday bar) was found and fixed.
-- **Tooling.** 72 offline tests, CI on Python 3.12 and 3.13, a Streamlit dashboard, and a reproducible `uv` environment.
+- **Tooling.** 82 offline tests, CI on Python 3.12 and 3.13, a Streamlit dashboard, and a reproducible `uv` environment.
 
 ## Roadmap
 
@@ -28,6 +28,7 @@ A self-improving **paper trading** bot for US ETFs. It evolves its own trading s
 - [x] **Phase 4: Showcase.** Dashboard, charts, seed-robustness study, CI, [design Q&A](docs/DESIGN_QA.md).
 - [x] **Experiment: beating buy & hold.** Pre-registered test of two ideas ([results](docs/EXPERIMENTS.md)).
 - [x] **Experiment 2: volatility targeting with leverage.** Passed development, failed both untouched final tests ([results](docs/EXPERIMENTS_2.md)).
+- [x] **Experiment 3: leveraged trend following.** Research-led; cut drawdowns on 18 never-used ETFs, but did not beat buy & hold ([results](docs/EXPERIMENTS_3.md)).
 
 ## How the bot learns
 
@@ -123,6 +124,21 @@ It had to beat buy & hold on both return and Sharpe in development and in two on
 - **Why it failed.** Volatility targeting cuts exposure in *volatile* crashes (2008: -25% vs -44% internationally). But it stays levered through *slow, grinding* declines (2001–02, 2011, 2015, 2018, 2022) and amplifies them.
 - **Why development looked good.** The 2007–21 period happened to be dominated by the volatile kind of crash.
 - **What survived.** Used without leverage, it is a genuine risk-reduction tool: similar return and much smaller drawdowns in 2 of 3 tests. It is not a way to beat buy & hold.
+
+## Experiment 3: leveraged trend following
+
+Chosen from published research ([Gayed & Bilello 2016](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2741701)) because its trend filter exits the slow declines that sank experiment 2. The rule: hold each ETF **with 1.5× leverage while it is above its 200-day average, T-bills below**. It was pre-registered, not tuned, and judged on **18 ETFs this project had never used** ([docs/EXPERIMENTS_3.md](docs/EXPERIMENTS_3.md)).
+
+| | US 2007–21 (dev) | 5 US sectors (never used) | 13 countries (never used) |
+|---|---|---|---|
+| Buy & hold: CAGR / Sharpe / max DD | 10.6% / 0.64 / -43% | 8.9% / 0.47 / -49% | 9.3% / 0.44 / -64% |
+| Trend + 1.5× leverage | 10.5% / 0.74 / -21% ❌ | 5.4% / 0.30 / -40% ❌ | **10.6% / 0.56 / -31%** ✅ |
+
+**It fails the pre-registered rule.** It won on countries, fell just short in dev, and lost clearly on US sectors.
+- **The trend filter cut the worst drawdown on all 18 new ETFs,** e.g. Korea -74% → -41%.
+- **It lowered returns on 13 of them.** Leverage only made up the difference where crashes were very deep.
+
+**The pattern across all three experiments:** defensive rules reliably reduce risk on unseen data. Turning that into *more return than buy & hold* has never survived a pre-registered test.
 
 ## Paper trading loop
 
