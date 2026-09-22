@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 import pandas as pd
 
@@ -15,7 +16,10 @@ from evotrader import data
 from evotrader.backtest import DEFAULT_COST_BPS, run_backtest
 from evotrader.strategies import REGISTRY, BuyAndHold
 
-PCT = ["total_return", "cagr", "volatility", "max_drawdown", "exposure", "win_rate"]
+ROOT = Path(__file__).resolve().parents[2]
+MODELS_DIR = ROOT / "models"
+REPORTS_DIR = ROOT / "reports"
+PCT =["total_return", "cagr", "volatility", "max_drawdown", "exposure", "win_rate"]
 
 
 def _parse_params(pairs: list[str]) -> dict[str, float | int]:
@@ -68,6 +72,75 @@ def cmd_compare(args: argparse.Namespace) -> None:
     print(f"\nTickers where strategy beat buy & hold:\n{beats.to_string()}")
 
 
+def _evo_config(args: argparse.Namespace):
+    from evotrader.evolution import EvolutionConfig
+
+    return EvolutionConfig(population=args.population, generations=args.generations,
+                           seed=args.seed)
+
+
+def cmd_evolve(args: argparse.Namespace) -> None:
+    """Evolve on all history up to --end and save the champion for paper trading."""
+    from evotrader.evolution import Evolver, GeneticStrategy, evaluate
+    from evotrader.walkforward import load_datasets
+
+    datasets = load_datasets(args.tickers, use_ml=not args.no_ml)
+    end = pd.Timestamp(args.end) if args.end else min(ds.bars.index[-1] for ds in datasets)
+    val_start = pd.Timestamp(args.start) + (end - pd.Timestamp(args.start)) * 0.75
+    val_start, train_end = str(val_start.date()), str((val_start - pd.Timedelta(days=1)).date())
+
+    print(f"\nEvolving on {args.start}..{train_end}, validating on {val_start}..{end.date()}")
+    evolver = Evolver(datasets, args.start, train_end, _evo_config(args))
+    result = evolver.run(lambda s: print(f"  gen {s.generation:>2}  best {s.best_fitness:+.3f}"
+                                         f"  mean {s.mean_fitness:+.3f}"))
+    scored = [(g, e, evaluate(g, datasets, val_start, str(end.date()), evolver.fitness_config))
+              for g, e in result.hall_of_fame]
+    scored.sort(key=lambda t: -t[2].fitness)
+
+    print("\nHall of fame (sorted by validation fitness):")
+    for g, e, v in scored[:5]:
+        print(f"  train {e.fitness:+.3f}  val {v.fitness:+.3f}  {g}")
+
+    champion, train_eval, val_eval = scored[0]
+    path = MODELS_DIR / "champion.json"
+    GeneticStrategy(champion).save(path, {
+        "trained": f"{args.start}..{train_end}", "validated": f"{val_start}..{end.date()}",
+        "train_fitness": train_eval.fitness, "val_fitness": val_eval.fitness,
+        "tickers": args.tickers, "created": pd.Timestamp.now().isoformat(timespec="seconds"),
+    })
+    print(f"\nChampion saved to {path}")
+
+
+def cmd_walkforward(args: argparse.Namespace) -> None:
+    from evotrader.walkforward import load_datasets, make_folds, run_walkforward, to_markdown
+
+    datasets = load_datasets(args.tickers, use_ml=not args.no_ml)
+    last = min(ds.bars.index[-1] for ds in datasets)
+    folds = make_folds(args.start, args.first_test_year, last, test_years=args.test_years)
+    report = run_walkforward(datasets, folds, _evo_config(args))
+
+    print("\nStitched out-of-sample results:\n")
+    print(format_metrics(report.oos_metrics[["cagr", "sharpe", "max_drawdown", "exposure"]]))
+
+    REPORTS_DIR.mkdir(exist_ok=True)
+    (REPORTS_DIR / "walkforward.md").write_text(to_markdown(report), encoding="utf-8")
+    report.oos_returns.to_csv(REPORTS_DIR / "walkforward_returns.csv")
+    print(f"\nReport written to {REPORTS_DIR / 'walkforward.md'}")
+
+
+def cmd_ml(args: argparse.Namespace) -> None:
+    from evotrader.ml import attach_ml_prob, diagnostics
+
+    rows = {}
+    for ticker in args.tickers:
+        bars = attach_ml_prob(ticker, data.load(ticker, start="1990-01-01"))
+        rows[ticker] = diagnostics(bars.loc[args.start:args.end])
+    table = pd.DataFrame(rows).T
+    print("\nOut-of-sample ML signal quality (5-day direction)\n")
+    print(table.round(3).to_string())
+    print("\nAUC 0.50 = coin flip. Anything reliably above ~0.52 on daily data is notable.")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="evotrader")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -86,6 +159,30 @@ def main(argv: list[str] | None = None) -> None:
     cmp_ = sub.add_parser("compare", parents=[common], help="All baselines across the universe")
     cmp_.add_argument("--tickers", nargs="+", default=data.DEFAULT_UNIVERSE)
     cmp_.set_defaults(func=cmd_compare)
+
+    universe = argparse.ArgumentParser(add_help=False)
+    universe.add_argument("--tickers", nargs="+", default=data.DEFAULT_UNIVERSE)
+    universe.add_argument("--no-ml", action="store_true", help="don't use the ML signal")
+
+    evo = argparse.ArgumentParser(add_help=False)
+    evo.add_argument("--population", type=int, default=60)
+    evo.add_argument("--generations", type=int, default=25)
+    evo.add_argument("--seed", type=int, default=0)
+
+    ev = sub.add_parser("evolve", parents=[universe, evo], help="Evolve and save a champion")
+    ev.add_argument("--start", default="2007-01-01")
+    ev.add_argument("--end", default=None)
+    ev.set_defaults(func=cmd_evolve)
+
+    wf = sub.add_parser("walkforward", parents=[universe, evo],
+                        help="Out-of-sample evaluation of the learning process")
+    wf.add_argument("--start", default="2007-01-01", help="start of every training window")
+    wf.add_argument("--first-test-year", type=int, default=2016)
+    wf.add_argument("--test-years", type=int, default=2)
+    wf.set_defaults(func=cmd_walkforward)
+
+    ml = sub.add_parser("ml", parents=[common, universe], help="ML signal diagnostics")
+    ml.set_defaults(func=cmd_ml)
 
     args = parser.parse_args(argv)
     args.func(args)

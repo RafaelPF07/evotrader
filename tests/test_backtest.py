@@ -3,12 +3,20 @@ import pandas as pd
 import pytest
 
 from evotrader.backtest import run_backtest, simulate
+from evotrader.evolution import GeneticStrategy, Genome
+from evotrader.evolution.genome import Compare, Not, Or
+from evotrader.features import FeatureSpec
 from evotrader.strategies import REGISTRY, BuyAndHold, SmaCrossover
 from evotrader.strategies.base import Strategy
 
 
 def default_strategies() -> list[Strategy]:
-    return [cls() for cls in REGISTRY.values()] + [SmaCrossover(fast=5, slow=20)]
+    evolved = GeneticStrategy(Genome(
+        entry=Or(Compare(FeatureSpec("rsi", (2,)), "<", 25.0),
+                 Compare(FeatureSpec("ma_spread", (10, 50)), ">", 0.01)),
+        exit=Not(Compare(FeatureSpec("zscore", (20,)), "<", 1.0)),
+    ))
+    return [cls() for cls in REGISTRY.values()] + [SmaCrossover(fast=5, slow=20), evolved]
 
 
 @pytest.mark.parametrize("strategy", default_strategies(), ids=repr)
