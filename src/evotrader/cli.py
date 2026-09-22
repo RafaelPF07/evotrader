@@ -192,14 +192,20 @@ def cmd_ml(args: argparse.Namespace) -> None:
 
 def _paper(args: argparse.Namespace, refresh: bool):
     """Open the account database and load the universe it trades."""
-    from evotrader.paper import PaperStore, PaperTrader
+    from evotrader.evolution.fitness import FitnessConfig
+    from evotrader.paper import LearnerConfig, PaperStore, PaperTrader
     from evotrader.walkforward import load_datasets
 
     store = PaperStore(args.db)
     tickers = store.get("tickers") or getattr(args, "tickers", data.DEFAULT_UNIVERSE)
     use_ml = store.get("use_ml", getattr(args, "ml", False))
+    # An account always re-learns with the objective it was created with. Accounts
+    # created before objectives existed used "sharpe".
+    default = getattr(args, "objective", "sharpe") if not store.initialised else "sharpe"
+    objective = store.get("objective", default)
+    learner = LearnerConfig(fitness=FitnessConfig(objective=objective))
     datasets = load_datasets(tickers, use_ml=use_ml, refresh=refresh, log=lambda _: None)
-    return store, PaperTrader(store, datasets)
+    return store, PaperTrader(store, datasets, learner)
 
 
 def cmd_paper_init(args: argparse.Namespace) -> None:
@@ -338,6 +344,9 @@ def main(argv: list[str] | None = None) -> None:
                         help="first trading day; a past date replays history honestly")
     p_init.add_argument("--tickers", nargs="+", default=data.DEFAULT_UNIVERSE)
     p_init.add_argument("--ml", action="store_true", help="let rules use the ML signal (slower)")
+    p_init.add_argument("--objective", choices=["excess", "sharpe"], default="excess",
+                        help="what re-learning optimises: excess = beat buy & hold "
+                             "(passed the pre-registered experiment); sharpe = original")
     p_init.set_defaults(func=cmd_paper_init)
 
     p_run = paper_sub.add_parser("run", parents=[db], help="Trade every day since the last run")

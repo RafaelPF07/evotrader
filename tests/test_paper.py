@@ -110,6 +110,23 @@ def test_orders_carry_reasons(tmp_path):
     assert reasons.str.contains("entry").all() and reasons.str.contains("strategy #").all()
 
 
+def test_account_records_and_uses_its_objective(tmp_path):
+    from dataclasses import replace
+
+    from evotrader.evolution import FitnessConfig
+
+    learner = replace(LEARNER, fitness=FitnessConfig(objective="excess"))
+    trader = PaperTrader(PaperStore(tmp_path / "x.db"), make_datasets(), learner,
+                         log=lambda _: None)
+    trader.init(100_000, START)
+    trader.run(until=pd.Timestamp("2019-01-15"))
+    assert trader.store.get("objective") == "excess"
+    assert trader.store.get("relearn_count") > 0
+    # Re-learning decisions are judged with the account's own objective.
+    log = trader.store.frame("SELECT incumbent_score FROM learning_log")
+    assert log["incumbent_score"].notna().all()
+
+
 def test_cannot_init_twice(tmp_path):
     trader = make_trader(tmp_path, make_datasets())
     trader.init(100_000, START)

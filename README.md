@@ -112,16 +112,23 @@ Live runs also discard today's partial bar while the market is open.
 
 ### Replay results: Jan 2025 to Sep 2026
 
+The live account re-learns with **idea 1's objective** (beat buy & hold), the only change that survived the [pre-registered experiment](docs/EXPERIMENTS.md). The original account is kept for comparison in `data/paper_v1_sharpe.db`. Both were replayed over the same days, and each first champion was trained only on data before 2025.
+
 ![Paper account](docs/img/paper_equity.png)
 
-| | paper account | equal-weight buy & hold |
-|---|---|---|
-| return | +31.0% | +37.1% |
-| Sharpe | 1.28 | |
-| max drawdown | -14.4% | |
-| closed trades | 64 (80% winners, avg +3.6%) | |
+| | live account (beat-B&H objective) | original account (Sharpe objective) | equal-weight buy & hold |
+|---|---|---|---|
+| return | +33.1% | +31.0% | +37.1% |
+| Sharpe | 1.31 | 1.28 | |
+| max drawdown | -14.4% | -14.4% | |
+| closed trades | 8 | 64 | |
+| strategy changes | 1 (July 2025) | 0 | |
 
-In all six re-learning rounds the champion was **kept**: no challenger beat it on unseen data by the required margin. Mistake analysis found no entry filter that would have removed more losing than winning return. The losers of this "stay invested, take profit on sharp spikes" rule look just like the winners at entry, which is itself a useful, honest result.
+**What happened:**
+- **It trades far less.** As in the experiment, the new objective makes the bot behave like buy & hold with a few exits: 8 trades instead of 64.
+- **It changed strategy once.** At the July 2025 re-learning, a challenger beat the champion on the held-out year by a wide margin (+0.05 vs -0.42) and was promoted.
+- **Most of the gap is one exit.** It stayed within about 1.5 points of buy & hold until spring 2026. Most of today's 4-point gap opened when it sold XLK (tech) in mid-April 2026 and missed a 16% rise before buying back in mid-May.
+- **Mistake analysis found no lessons.** No entry filter would have removed more losing than winning return.
 
 ### Running it daily
 

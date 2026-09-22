@@ -57,8 +57,10 @@ def status_text(store: PaperStore, bars: dict[str, pd.DataFrame]) -> str:
 
     sid, genome = store.active_strategy()
     origin = store.frame("SELECT origin, created FROM strategies WHERE id = ?", (sid,)).iloc[0]
+    objective = {"excess": "beat buy & hold (information ratio)",
+                 "sharpe": "own Sharpe ratio"}[store.get("objective", "sharpe")]
     lines += [f"Active strategy #{sid} ({origin['origin']}, since {origin['created']}):",
-              f"  {genome}", ""]
+              f"  {genome}", f"  learning objective: {objective}", ""]
 
     positions = store.positions()
     if positions:
