@@ -17,8 +17,8 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import roc_auc_score
 
+from evotrader import data as _data
 from evotrader import indicators as ind
-from evotrader.data import CACHE_DIR
 from evotrader.features import ML_COLUMN
 from evotrader.strategies.base import Strategy
 
@@ -98,7 +98,7 @@ def attach_ml_prob(
 ) -> pd.DataFrame:
     """Return `bars` with an `ml_prob` column, cached on disk per ticker and config."""
     cfg = config or MlConfig()
-    path = CACHE_DIR / f"ml_{ticker.upper()}_{cfg.key()}.csv"
+    path = _data.CACHE_DIR / f"ml_{ticker.upper()}_{cfg.key()}.csv"
     proba = None
     if use_cache and path.exists():
         cached = pd.read_csv(path, index_col="date", parse_dates=True)[ML_COLUMN]

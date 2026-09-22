@@ -301,6 +301,48 @@ def cmd_evolution(args: argparse.Namespace) -> None:
         print(f"  {len(df)} individuals -> {path.relative_to(ROOT)}\n  champion: {champ['rule']}")
 
 
+def cmd_snapshot(args: argparse.Namespace) -> None:
+    m = data.create_snapshot(args.name)
+    print(f"Snapshot {m['name']!r} frozen at {m['created']}")
+    print(f"  fingerprint {m['fingerprint']}")
+
+
+def cmd_explore(args: argparse.Namespace) -> None:
+    from evotrader import explore, ledger
+
+    if args.ledger:
+        table = ledger.read()
+        print(f"Trials so far: {ledger.total_trials()} "
+              f"({ledger.HISTORICAL_TRIALS} from the pre-registered experiments)\n")
+        cols = ["trial", "name", "sharpe", "bh_sharpe", "cagr", "bh_cagr", "exposure", "dsr"]
+        print(table[cols].to_string(index=False) if len(table) else "No exploration rounds yet.")
+        return
+    if not args.name:
+        raise SystemExit("give the round a name, e.g. `evotrader explore macro-r1`")
+    cap = None if args.max_exposure in ("none", "None") else float(args.max_exposure)
+    cfg = explore.ExploreConfig(
+        name=args.name, description=args.description, objective=args.objective,
+        max_exposure=cap, macro=not args.no_macro, seeds=tuple(range(args.seeds)),
+        population=args.population, generations=args.generations, snapshot=args.snapshot,
+        space=args.space)
+    result = explore.run(cfg)
+    e = result["ensemble"]
+    print(f"\n[{cfg.name}] trial #{result['trial']}  {result['period']}  (exploration, "
+          "not proof)\n")
+    print(f"  ensemble   CAGR {e['cagr']:6.1%}  Sharpe {e['sharpe']:.2f}  "
+          f"max DD {e['max_drawdown']:6.1%}  invested {e['exposure']:.0%}  "
+          f"corr w/ B&H {e['corr_with_bh']:.2f}")
+    print(f"  buy & hold CAGR {e['bh_cagr']:6.1%}  Sharpe {e['bh_sharpe']:.2f}  "
+          f"max DD {e['bh_max_drawdown']:6.1%}")
+    print(f"  beats B&H on CAGR and Sharpe: {e['beats_bh']}   "
+          f"deflated Sharpe (N={result['trial']}): {e['dsr']:.2f}")
+    for s in result["seeds"]:
+        print(f"    seed {s['seed']}: CAGR {s['cagr']:6.1%}  Sharpe {s['sharpe']:.2f}  "
+              f"invested {s['exposure']:.0%}")
+    print("  building blocks used by champions:",
+          ", ".join(f"{k} x{n}" for k, n in result["champion_building_blocks"][:10]))
+
+
 def cmd_significance(args: argparse.Namespace) -> None:
     from evotrader import significance as sig
 
@@ -453,6 +495,26 @@ def main(argv: list[str] | None = None) -> None:
     p_journal = paper_sub.add_parser("journal", parents=[db], help="Closed trades and why")
     p_journal.add_argument("-n", type=int, default=10)
     p_journal.set_defaults(func=cmd_paper_journal)
+
+    snap = sub.add_parser("snapshot", help="Freeze the current data for reproducible runs")
+    snap.add_argument("name")
+    snap.set_defaults(func=cmd_snapshot)
+
+    ex = sub.add_parser("explore", help="An exploration round on historical data (logged)")
+    ex.add_argument("name", nargs="?")
+    ex.add_argument("--description", default="")
+    ex.add_argument("--objective", choices=["excess", "sharpe"], default="excess")
+    ex.add_argument("--max-exposure", default="0.8", help="e.g. 0.8, or 'none'")
+    ex.add_argument("--no-macro", action="store_true")
+    ex.add_argument("--seeds", type=int, default=3)
+    ex.add_argument("--population", type=int, default=60)
+    ex.add_argument("--generations", type=int, default=25)
+    ex.add_argument("--ledger", action="store_true", help="list every trial so far")
+    ex.add_argument("--space", choices=["timing", "switch"], default="timing",
+                    help="timing = in/out per ETF; switch = risk-on stocks / risk-off TLT+GLD")
+    ex.add_argument("--snapshot", default=None,
+                    help="run on a frozen data snapshot (see `evotrader snapshot`)")
+    ex.set_defaults(func=cmd_explore)
 
     sig = sub.add_parser("significance",
                          help="Deflated Sharpe ratios of every apparent win (36 trials)")

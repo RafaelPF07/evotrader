@@ -16,7 +16,8 @@ import numpy as np
 from evotrader.evolution.fitness import Dataset, Evaluation, FitnessConfig, evaluate
 from evotrader.evolution.genome import Genome, GenomeFactory
 from evotrader.evolution.rotation import Panel, RotationFactory, evaluate_rotation
-from evotrader.features import ML_COLUMN, PRICE_KINDS
+from evotrader.evolution.switch import SwitchBook, evaluate_switch
+from evotrader.features import KINDS, MACRO_KINDS, ML_COLUMN, PRICE_KINDS
 
 
 @dataclass(frozen=True)
@@ -53,9 +54,18 @@ class EvolutionResult:
 
 
 def available_kinds(datasets: Sequence[Dataset]) -> tuple[str, ...]:
-    """Use the ML signal as a building block only if every dataset has it."""
-    has_ml = all(ML_COLUMN in ds.bars for ds in datasets)
-    return (*PRICE_KINDS, ML_COLUMN) if has_ml else PRICE_KINDS
+    """Building blocks every dataset can support.
+
+    Price indicators always; the ML signal and the market-wide macro signals only when
+    they have been attached to the data. The live bot attaches neither, so it keeps
+    drawing from exactly the original building blocks.
+    """
+    has = lambda col: all(col in ds.bars for ds in datasets)  # noqa: E731
+    kinds = (*PRICE_KINDS, ML_COLUMN) if has(ML_COLUMN) else PRICE_KINDS
+    if has("m_spy"):  # macro data attached (see macro.attach_macro)
+        kinds += tuple(k for k in MACRO_KINDS
+                       if KINDS[k].requires is None or has(KINDS[k].requires))
+    return kinds
 
 
 class Evolver:
@@ -76,11 +86,15 @@ class Evolver:
         self.fitness_config = fitness_config or FitnessConfig()
         self.rng = np.random.default_rng(self.config.seed)
         kinds = available_kinds(datasets)
+        self.panel: Panel | None = None
+        self.switch: SwitchBook | None = None
         if space == "rotation":
-            self.panel: Panel | None = Panel(datasets)
+            self.panel = Panel(datasets)
             self.factory = RotationFactory(self.rng, kinds)
         elif space == "timing":
-            self.panel = None
+            self.factory = GenomeFactory(self.rng, kinds, self.config.max_depth)
+        elif space == "switch":
+            self.switch = SwitchBook(datasets)
             self.factory = GenomeFactory(self.rng, kinds, self.config.max_depth)
         else:
             raise ValueError(f"unknown search space {space!r}")
@@ -92,6 +106,8 @@ class Evolver:
         """Score any genome of this search space on an arbitrary date window."""
         if self.panel is not None:
             return evaluate_rotation(genome, self.panel, start, end, self.fitness_config)
+        if self.switch is not None:
+            return evaluate_switch(genome, self.switch, start, end, self.fitness_config)
         return evaluate(genome, self.datasets, start, end, self.fitness_config)
 
     def score(self, genome: Genome) -> Evaluation:

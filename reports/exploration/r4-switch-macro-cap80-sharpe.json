@@ -1,0 +1,174 @@
+{
+  "config": {
+    "name": "r4-switch-macro-cap80-sharpe",
+    "description": "risk-on stocks / risk-off TLT+GLD switch (no idle cash); all building blocks; >=20% of time out of stocks; Sharpe objective",
+    "objective": "sharpe",
+    "max_exposure": 0.8,
+    "macro": true,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "population": 60,
+    "generations": 25,
+    "train_start": "2007-01-01",
+    "first_test_year": 2012,
+    "test_years": 2,
+    "snapshot": "2026-09-22",
+    "space": "switch"
+  },
+  "trial": 40,
+  "data_fingerprint": "a5c9f0017e863e67573d8c7b398a7b9dde4c26d82484fe5996da3b2741d37448",
+  "period": "2012-01-03..2026-09-22",
+  "ensemble": {
+    "sharpe": 0.6241048537440836,
+    "bh_sharpe": 0.9681044320736294,
+    "cagr": 0.06709429047761173,
+    "bh_cagr": 0.13214468487735176,
+    "max_drawdown": -0.2715624204717171,
+    "bh_max_drawdown": -0.3005371469029373,
+    "exposure": 0.43961091596865715,
+    "corr_with_bh": 0.7322361524623486,
+    "active_sharpe": -0.6544134576747961,
+    "psr": 0.006399878629471537,
+    "dsr": 1.5595639719861311e-06,
+    "beats_bh": false
+  },
+  "seeds": [
+    {
+      "seed": 0,
+      "sharpe": 0.6806781444081198,
+      "bh_sharpe": 0.9681044320736294,
+      "cagr": 0.08236024360714134,
+      "bh_cagr": 0.13214468487735176,
+      "max_drawdown": -0.32379066031972625,
+      "bh_max_drawdown": -0.3005371469029373,
+      "exposure": 0.281545528235612,
+      "corr_with_bh": 0.28748309603911576,
+      "active_sharpe": -0.29072334134183137,
+      "psr": 0.13410611551921825,
+      "dsr": 0.0005129857715038045,
+      "beats_bh": false,
+      "champions": [
+        "ENTRY halloween < 0.8 | EXIT NOT (credit_mom(5) < 0.038 AND (vvix < 90 AND breadth_mom(20) > -0.011))",
+        "ENTRY halloween < 0.9 | EXIT NOT (credit_mom(5) < 0.038 AND (vvix < 91 AND breadth_mom(20) > -0.010))",
+        "ENTRY halloween < 0.9 | EXIT NOT (credit_mom(5) < 0.037 AND (vvix < 91 AND breadth_mom(20) > -0.010))",
+        "ENTRY (halloween < 1.0 AND vix_mom(63) < 0.65) | EXIT NOT (credit_mom(5) < 0.037 AND (vvix < 91 AND breadth_mom(20) > -0.010))",
+        "ENTRY (halloween < 1.0 AND inflation_mom(63) > 0.011) | EXIT NOT (credit_mom(5) < 0.037 AND breadth_mom(20) > -0.010)",
+        "ENTRY (halloween < 0.7 AND inflation_mom(63) > 0.012) | EXIT NOT (credit_mom(5) < 0.037 AND breadth_mom(63) > -0.025)",
+        "ENTRY (halloween < 0.7 AND inflation_mom(63) > 0.012) | EXIT NOT (credit_mom(5) < 0.037 AND breadth_mom(63) > -0.013)"
+      ]
+    },
+    {
+      "seed": 1,
+      "sharpe": 0.31622838139524595,
+      "bh_sharpe": 0.9681044320736294,
+      "cagr": 0.039256371282019975,
+      "bh_cagr": 0.13214468487735176,
+      "max_drawdown": -0.37925601942334186,
+      "bh_max_drawdown": -0.3005371469029373,
+      "exposure": 0.46392866792758714,
+      "corr_with_bh": 0.7226013453246759,
+      "active_sharpe": -0.7047920892506486,
+      "psr": 0.0034946180691787705,
+      "dsr": 5.192464177674632e-07,
+      "beats_bh": false,
+      "champions": [
+        "ENTRY (copper_gold_mom(63) > 0.092 AND (rel_strength(126) < 0.104 AND tom > 0.7)) | EXIT copper_gold_mom(126) > 0.145",
+        "ENTRY (copper_gold_mom(63) > 0.081 AND tom > 0.8) | EXIT copper_gold_mom(126) > 0.142",
+        "ENTRY (copper_gold_mom(63) > 0.074 AND tom > 0.6) | EXIT copper_gold_mom(126) > 0.144",
+        "ENTRY (copper_gold_mom(63) > 0.065 AND tom > 0.6) | EXIT (copper_gold_mom(126) > 0.142 AND em_mom(63) < 0.144)",
+        "ENTRY (copper_gold_mom(63) > 0.065 AND tom > 0.5) | EXIT (copper_gold_mom(126) > 0.102 AND em_mom(63) < 0.133)",
+        "ENTRY (copper_gold_mom(63) > 0.065 AND tom > 0.6) | EXIT (copper_gold_mom(126) > 0.097 AND em_mom(63) < 0.147)",
+        "ENTRY (copper_gold_mom(63) > 0.062 AND tom > 0.6) | EXIT (copper_gold_mom(126) > 0.097 AND vix_term < 0.93)"
+      ]
+    },
+    {
+      "seed": 2,
+      "sharpe": 0.5000355717587083,
+      "bh_sharpe": 0.9681044320736294,
+      "cagr": 0.06576963748896003,
+      "bh_cagr": 0.13214468487735176,
+      "max_drawdown": -0.31679221594445695,
+      "bh_max_drawdown": -0.3005371469029373,
+      "exposure": 0.5733585517427722,
+      "corr_with_bh": 0.637347041927927,
+      "active_sharpe": -0.477082283093936,
+      "psr": 0.03498873394222408,
+      "dsr": 3.411830198409946e-05,
+      "beats_bh": false,
+      "champions": [
+        "ENTRY (mom(5) < -0.134 OR small_large_mom(126) < -0.039) | EXIT vix < 58.7",
+        "ENTRY (mom(5) < -0.112 OR small_large_mom(126) < -0.048) | EXIT vix < 59.8",
+        "ENTRY (mom(5) < -0.121 OR small_large_mom(126) < -0.048) | EXIT (inflation_mom(63) < 0.027 AND (vix < 59.2 AND copper_gold_mom(20) < -0.085))",
+        "ENTRY (mom(5) < -0.150 OR small_large_mom(126) < -0.068) | EXIT ((vix < 58.7 AND copper_gold_mom(20) < 0.129) AND copper_gold_mom(63) < -0.159)",
+        "ENTRY (small_large_mom(126) < -0.068 OR mom(5) < -0.121) | EXIT (vix < 58.7 AND copper_gold_mom(63) < -0.114)",
+        "ENTRY (small_large_mom(126) < -0.016 OR mom(5) < -0.126) | EXIT (vix < 59.7 AND copper_gold_mom(63) < -0.112)",
+        "ENTRY ((small_large_mom(126) < -0.016 OR skew > 132) OR mom(5) < -0.126) | EXIT (vix < 59.7 AND copper_gold_mom(63) < -0.112)"
+      ]
+    }
+  ],
+  "champion_building_blocks": [
+    [
+      "copper_gold_mom",
+      20
+    ],
+    [
+      "halloween",
+      7
+    ],
+    [
+      "credit_mom",
+      7
+    ],
+    [
+      "breadth_mom",
+      7
+    ],
+    [
+      "tom",
+      7
+    ],
+    [
+      "mom",
+      7
+    ],
+    [
+      "small_large_mom",
+      7
+    ],
+    [
+      "vix",
+      7
+    ],
+    [
+      "vvix",
+      4
+    ],
+    [
+      "inflation_mom",
+      4
+    ],
+    [
+      "em_mom",
+      3
+    ],
+    [
+      "vix_mom",
+      1
+    ],
+    [
+      "rel_strength",
+      1
+    ],
+    [
+      "vix_term",
+      1
+    ],
+    [
+      "skew",
+      1
+    ]
+  ]
+}
