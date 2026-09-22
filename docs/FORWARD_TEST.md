@@ -55,4 +55,4 @@ The 6- and 12-month checkpoints are **progress reports only**. No conclusion is 
 
 | Date | Evolved bot vs B&H | Trend vs B&H | Notes |
 |---|---|---|---|
-| 2026-09-22 | start | start | plan committed; trend account created |
+| 2026-09-22 | start | start | Plan committed (`086bbc6`), then the trend account was created after the US close. First decisions at the 22 Sep close: 8 of 10 ETFs above their 200-day average (all but TLT and GLD), so the account is 120% invested from the 23 Sep open. |
