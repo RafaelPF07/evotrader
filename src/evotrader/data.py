@@ -63,6 +63,28 @@ def load(
     return validate(df.loc[start:end])
 
 
+RATES_TICKER = "^IRX"  # 13-week US Treasury bill yield, in percent
+
+
+def load_rates(refresh: bool = False) -> pd.Series:
+    """Daily 3-month T-bill yield as a decimal (0.05 = 5%), used to charge for borrowing.
+
+    Not a tradable price (it can be zero or slightly negative), so it skips `validate`.
+    """
+    path = _cache_path(RATES_TICKER)
+    if refresh or not path.exists():
+        import yfinance as yf
+
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        raw = yf.download(RATES_TICKER, start="1990-01-01", auto_adjust=False, progress=False,
+                          multi_level_index=False)
+        rates = raw["Close"].rename("rate") / 100
+        rates.index = pd.to_datetime(rates.index).tz_localize(None)
+        rates.index.name = "date"
+        drop_incomplete(rates.to_frame()).to_csv(path)
+    return pd.read_csv(path, index_col="date", parse_dates=True)["rate"].dropna()
+
+
 def validate(df: pd.DataFrame) -> pd.DataFrame:
     """Check a bar DataFrame is well formed; raise early rather than backtest garbage."""
     missing = set(COLUMNS) - set(df.columns)
