@@ -55,7 +55,12 @@ def status_text(store: PaperStore, bars: dict[str, pd.DataFrame]) -> str:
         "",
     ]
 
-    if store.get("strategy") == "trend":
+    if store.get("strategy") == "ensemble":
+        model = store.get("model")
+        lines += [f"Strategy: {model['name']} (forward test, rules frozen)",
+                  *[f"  rule {r['seed']}: {r['rule']}" for r in model["rules"]],
+                  "  each ETF holds k/3 of its slot when k of the 3 rules say in", ""]
+    elif store.get("strategy") == "trend":
         rule = store.get("rule")
         lines += ["Strategy: fixed leveraged trend rule (forward test, nothing re-learned)",
                   f"  hold each ETF at {rule['leverage']}x while it closes above its "

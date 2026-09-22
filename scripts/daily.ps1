@@ -7,8 +7,8 @@ Set-Location $root
 New-Item -ItemType Directory -Force -Path "$root\logs" | Out-Null
 $log = "$root\logs\paper-$(Get-Date -Format 'yyyy-MM').log"
 
-# The evolved bot, and the forward test of the leveraged trend rule (if created).
-$accounts = @("data\paper.db", "data\paper_trend.db") | Where-Object { Test-Path "$root\$_" }
+# The evolved bot and the forward-tested fixed strategies (if created).
+$accounts = @("data\paper.db", "data\paper_trend.db", "data\paper_ensemble.db") | Where-Object { Test-Path "$root\$_" }
 foreach ($db in $accounts) {
     "==== $(Get-Date -Format 's')  $db ====" | Out-File -Append -Encoding utf8 $log
     uv run evotrader paper run --db $db *>&1 | Out-File -Append -Encoding utf8 $log

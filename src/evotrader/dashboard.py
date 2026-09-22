@@ -142,6 +142,15 @@ def journal_tab(store: PaperStore) -> None:
 
 
 def learning_tab(store: PaperStore) -> None:
+    if store.get("strategy") == "ensemble":
+        model = store.get("model")
+        st.subheader("Strategy")
+        st.code("\n".join(f"rule {r['seed']}: {r['rule']}" for r in model["rules"]),
+                language=None)
+        st.caption(f"{model['name']}. Three frozen rules trained on {model['trained']} and "
+                   f"validated on {model['validated']}; each ETF holds k/3 of its slot when k "
+                   "rules say in. Forward-tested, never re-learned (docs/FORWARD_TEST.md).")
+        return
     if store.get("strategy") == "trend":
         rule = store.get("rule")
         st.subheader("Strategy")
@@ -416,6 +425,7 @@ def main() -> None:
     if len(accounts) > 1:  # e.g. the evolved bot and the forward-tested trend rule
         labels = {"paper.db": "Evolved bot (live)",
                   "paper_trend.db": "Trend + leverage (forward test)",
+                  "paper_ensemble.db": "Copper/gold ensemble (forward test)",
                   "paper_v1_sharpe.db": "Evolved bot, original objective (archived)"}
         db = st.selectbox("Account", accounts, index=accounts.index(db) if db in accounts else 0,
                           format_func=lambda p: labels.get(p.name, p.name))
