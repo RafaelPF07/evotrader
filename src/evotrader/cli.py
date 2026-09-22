@@ -262,6 +262,27 @@ def cmd_dashboard(args: argparse.Namespace) -> None:
                    check=False)
 
 
+def cmd_experiment(args: argparse.Namespace) -> None:
+    from evotrader import experiments as ex
+    from evotrader.walkforward import load_datasets
+
+    if args.summary:
+        table = ex.summary_table(args.stage)
+        print(table.to_string(index=False) if len(table) else "No results yet.")
+        return
+    if args.arm is None:
+        raise SystemExit("--arm is required unless --summary is given")
+    ex.check_allowed(args.stage, args.arm)
+    datasets = load_datasets(data.DEFAULT_UNIVERSE, use_ml=False, log=lambda _: None)
+    results = ex.run_arm(ex.ARMS[args.arm], args.stage, datasets)
+    ex.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    results.to_csv(ex.result_path(args.stage, args.arm), index=False)
+    v = ex.verdict(results)
+    print(f"\nArm {args.arm} ({args.stage}): mean excess Sharpe {v['mean_excess_sharpe']:+.3f}, "
+          f"{v['seeds_beating']}/{len(results)} seeds beat buy & hold -> "
+          f"{'PASS' if v['passed'] else 'FAIL'}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="evotrader")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -330,6 +351,12 @@ def main(argv: list[str] | None = None) -> None:
     p_journal = paper_sub.add_parser("journal", parents=[db], help="Closed trades and why")
     p_journal.add_argument("-n", type=int, default=10)
     p_journal.set_defaults(func=cmd_paper_journal)
+
+    exp = sub.add_parser("experiment", help="Pre-registered experiments (docs/EXPERIMENTS.md)")
+    exp.add_argument("--stage", choices=["dev", "holdout"], required=True)
+    exp.add_argument("--arm", choices=["A", "B", "C", "D"])
+    exp.add_argument("--summary", action="store_true", help="show results for the stage")
+    exp.set_defaults(func=cmd_experiment)
 
     ch = sub.add_parser("charts", parents=[db], help="Regenerate README charts in docs/img")
     ch.set_defaults(func=cmd_charts)
