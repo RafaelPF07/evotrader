@@ -55,12 +55,21 @@ def status_text(store: PaperStore, bars: dict[str, pd.DataFrame]) -> str:
         "",
     ]
 
-    sid, genome = store.active_strategy()
-    origin = store.frame("SELECT origin, created FROM strategies WHERE id = ?", (sid,)).iloc[0]
-    objective = {"excess": "beat buy & hold (information ratio)",
-                 "sharpe": "own Sharpe ratio"}[store.get("objective", "sharpe")]
-    lines += [f"Active strategy #{sid} ({origin['origin']}, since {origin['created']}):",
-              f"  {genome}", f"  learning objective: {objective}", ""]
+    if store.get("strategy") == "trend":
+        rule = store.get("rule")
+        lines += ["Strategy: fixed leveraged trend rule (forward test, nothing re-learned)",
+                  f"  hold each ETF at {rule['leverage']}x while it closes above its "
+                  f"{rule['sma']}-day average; cash otherwise",
+                  f"  net interest so far: ${store.get('financing_total', 0.0):+,.2f} "
+                  "(earned on cash, paid on borrowing)", ""]
+    else:
+        sid, genome = store.active_strategy()
+        origin = store.frame("SELECT origin, created FROM strategies WHERE id = ?",
+                             (sid,)).iloc[0]
+        objective = {"excess": "beat buy & hold (information ratio)",
+                     "sharpe": "own Sharpe ratio"}[store.get("objective", "sharpe")]
+        lines += [f"Active strategy #{sid} ({origin['origin']}, since {origin['created']}):",
+                  f"  {genome}", f"  learning objective: {objective}", ""]
 
     positions = store.positions()
     if positions:

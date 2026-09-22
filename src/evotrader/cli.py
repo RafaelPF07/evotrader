@@ -204,6 +204,16 @@ def _paper(args: argparse.Namespace, refresh: bool):
     # created before objectives existed used "sharpe".
     default = getattr(args, "objective", "sharpe") if not store.initialised else "sharpe"
     objective = store.get("objective", default)
+    strategy = store.get("strategy") or getattr(args, "strategy", "evolved")
+    if strategy == "trend":
+        from evotrader.paper.trend_trader import TrendPaperTrader
+        from evotrader.trend import TrendLeverage
+
+        rule = store.get("rule") or {"sma": 200, "leverage": getattr(args, "leverage", 1.5),
+                                     "borrow_spread": 0.01}
+        datasets = load_datasets(tickers, use_ml=False, refresh=refresh, log=lambda _: None)
+        rates = data.load_rates(refresh=refresh)
+        return store, TrendPaperTrader(store, datasets, TrendLeverage(**rule), rates)
     learner = LearnerConfig(fitness=FitnessConfig(objective=objective))
     datasets = load_datasets(tickers, use_ml=use_ml, refresh=refresh, log=lambda _: None)
     return store, PaperTrader(store, datasets, learner)
@@ -212,7 +222,7 @@ def _paper(args: argparse.Namespace, refresh: bool):
 def cmd_paper_init(args: argparse.Namespace) -> None:
     store, trader = _paper(args, refresh=True)
     trader.init(args.capital, args.start)
-    store.set("use_ml", args.ml)
+    store.set("use_ml", args.ml and args.strategy == "evolved")
     store.commit()
     print(f"\nAccount created in {args.db}. Run `evotrader paper run` to trade up to today.")
 
@@ -289,6 +299,23 @@ def cmd_evolution(args: argparse.Namespace) -> None:
         _, df = h.load(path)
         champ = h.champion(df)
         print(f"  {len(df)} individuals -> {path.relative_to(ROOT)}\n  champion: {champ['rule']}")
+
+
+def cmd_significance(args: argparse.Namespace) -> None:
+    from evotrader import significance as sig
+
+    table, checks = sig.build()
+    # Experiment 1's GA results are chaotic in tiny data revisions (see
+    # docs/EXPERIMENTS.md, "Reproducibility"), so mismatches are reported, not hidden.
+    print("\nExperiment 1 reproduction vs recorded Sharpe:")
+    print(checks.to_string(index=False, float_format=lambda v: f"{v:+.6f}"))
+    REPORTS_DIR.mkdir(exist_ok=True)
+    table.to_csv(REPORTS_DIR / "significance.csv", index=False)
+    checks.to_csv(REPORTS_DIR / "significance_reproduction.csv", index=False)
+    (REPORTS_DIR / "significance.md").write_text(sig.to_markdown(table, checks),
+                                                 encoding="utf-8")
+    cols = ["candidate", "stage", "days", "active_sharpe", "psr", "dsr_n10", "dsr_n36"]
+    print(table[cols].to_string(index=False, float_format=lambda v: f"{v:.3f}"))
 
 
 def cmd_experiment3(args: argparse.Namespace) -> None:
@@ -408,6 +435,11 @@ def main(argv: list[str] | None = None) -> None:
     p_init.add_argument("--objective", choices=["excess", "sharpe"], default="excess",
                         help="what re-learning optimises: excess = beat buy & hold "
                              "(passed the pre-registered experiment); sharpe = original")
+    p_init.add_argument("--strategy", choices=["evolved", "trend"], default="evolved",
+                        help="evolved = self-learning GA bot; trend = fixed leveraged "
+                             "200-day trend rule (the forward test, docs/FORWARD_TEST.md)")
+    p_init.add_argument("--leverage", type=float, default=1.5,
+                        help="trend strategy only: leverage while above the average")
     p_init.set_defaults(func=cmd_paper_init)
 
     p_run = paper_sub.add_parser("run", parents=[db], help="Trade every day since the last run")
@@ -421,6 +453,10 @@ def main(argv: list[str] | None = None) -> None:
     p_journal = paper_sub.add_parser("journal", parents=[db], help="Closed trades and why")
     p_journal.add_argument("-n", type=int, default=10)
     p_journal.set_defaults(func=cmd_paper_journal)
+
+    sig = sub.add_parser("significance",
+                         help="Deflated Sharpe ratios of every apparent win (36 trials)")
+    sig.set_defaults(func=cmd_significance)
 
     exp3 = sub.add_parser("experiment3",
                           help="Pre-registered leveraged trend test (docs/EXPERIMENTS_3.md)")

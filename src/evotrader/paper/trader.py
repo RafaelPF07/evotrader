@@ -108,7 +108,7 @@ class PaperTrader:
             open_ = float(bars.at[d, "open"])
             if order.side == "buy":
                 price = open_ * (1 + self.cost)
-                qty = min(order.qty, s.cash / price)
+                qty = order.qty if self.allow_borrowing else min(order.qty, s.cash / price)
                 s.cash = s.cash - qty * price
                 s.upsert_position(Position(order.ticker, qty, price, _day(d), order.reason))
             else:
@@ -116,7 +116,7 @@ class PaperTrader:
                 qty, price = pos.qty, open_ * (1 - self.cost)
                 s.cash = s.cash + qty * price
                 s.add_trade(
-                    ticker=order.ticker, strategy_id=s.active_strategy()[0],
+                    ticker=order.ticker, strategy_id=self._strategy_id(),
                     entry_date=pos.entry_date, entry_price=pos.avg_price, exit_date=_day(d),
                     exit_price=price, qty=qty, pnl=qty * (price - pos.avg_price),
                     **{"return": price / pos.avg_price - 1},
@@ -136,7 +136,17 @@ class PaperTrader:
         return total
 
     def _mark(self, d: pd.Timestamp) -> None:
+        self._accrue(d)
         self.store.record_equity(_day(d), self.store.cash, self.holdings_value(d))
+
+    # --- hooks for other account types (see trend_trader.py) --------------------
+    allow_borrowing = False  # the evolved bot never spends more cash than it has
+
+    def _accrue(self, d: pd.Timestamp) -> None:
+        """Interest on cash or borrowing for day d. The evolved bot's cash earns nothing."""
+
+    def _strategy_id(self) -> int:
+        return self.store.active_strategy()[0]
 
     # --- 3. learn -------------------------------------------------------------
     def _relearn_due(self, d: pd.Timestamp) -> bool:
