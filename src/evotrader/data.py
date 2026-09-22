@@ -11,6 +11,8 @@ from pathlib import Path
 import pandas as pd
 
 CACHE_DIR = Path(__file__).resolve().parents[2] / "data" / "cache"
+SNAPSHOT_DIR = CACHE_DIR.parent / "snapshots"
+_frozen = False  # True while reading from a snapshot: never download, never overwrite
 COLUMNS = ["open", "high", "low", "close", "volume"]
 MARKET_CLOSE_MINUTES = 16 * 60 + 30  # 16:30 ET: close plus a buffer for final prices
 
@@ -57,6 +59,7 @@ def load(
     """Load bars for `ticker`, using the cache when possible."""
     path = _cache_path(ticker)
     if refresh or not path.exists():
+        ensure_writable(path)
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         download(ticker, start="1990-01-01").to_csv(path)
     df = pd.read_csv(path, index_col="date", parse_dates=True)
@@ -73,6 +76,7 @@ def load_rates(refresh: bool = False) -> pd.Series:
     """
     path = _cache_path(RATES_TICKER)
     if refresh or not path.exists():
+        ensure_writable(path)
         import yfinance as yf
 
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -95,3 +99,53 @@ def validate(df: pd.DataFrame) -> pd.DataFrame:
     if (df[["open", "high", "low", "close"]] <= 0).any().any():
         raise ValueError("Prices must be positive")
     return df[COLUMNS]
+
+
+# --- frozen data snapshots -----------------------------------------------------------
+# Yahoo revises historical prices slightly on every download, and the genetic algorithm
+# is chaotic: a one-in-a-million change can evolve a different champion. So any result
+# meant to be reproducible runs on a frozen, fingerprinted copy of the data.
+
+def ensure_writable(path: Path) -> None:
+    if _frozen:
+        raise RuntimeError(f"{path.name} is not in the frozen snapshot, and snapshots are "
+                           "never downloaded into or refreshed")
+
+
+def create_snapshot(name: str) -> dict:
+    """Copy the current cache into data/snapshots/<name> and fingerprint every file."""
+    import shutil
+
+    target = SNAPSHOT_DIR / name
+    if target.exists():
+        raise RuntimeError(f"snapshot {name!r} already exists; snapshots are immutable")
+    target.mkdir(parents=True)
+    for f in sorted(CACHE_DIR.glob("*.csv")):
+        if not f.name.startswith("ml_"):  # derived ML outputs are recomputed, not frozen
+            shutil.copy2(f, target / f.name)
+    manifest = {"name": name, "created": pd.Timestamp.now().isoformat(timespec="seconds"),
+                "fingerprint": fingerprint(target)}
+    (target / "manifest.json").write_text(__import__("json").dumps(manifest, indent=2),
+                                          encoding="utf-8")
+    return manifest
+
+
+def fingerprint(directory: Path) -> str:
+    """SHA-256 over every data file's name and exact bytes."""
+    import hashlib
+
+    h = hashlib.sha256()
+    for f in sorted(directory.glob("*.csv")):
+        h.update(f.name.encode())
+        h.update(f.read_bytes())
+    return h.hexdigest()
+
+
+def use_snapshot(name: str) -> str:
+    """Read all data from a frozen snapshot from now on; returns its fingerprint."""
+    global CACHE_DIR, _frozen
+    target = SNAPSHOT_DIR / name
+    if not target.exists():
+        raise FileNotFoundError(f"no snapshot {name!r}; create it with `evotrader snapshot`")
+    CACHE_DIR, _frozen = target, True
+    return fingerprint(target)

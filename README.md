@@ -18,7 +18,7 @@ A self-improving **paper trading** bot for US ETFs. It evolves its own trading s
   - It analyses its losing trades for patterns and re-evolves quarterly.
   - It swaps strategies only on held-out evidence.
 - **Leakage tests.** Tests scramble future prices and assert that no past decision, ML prediction or account entry changes. A live-only leak (Yahoo's partial intraday bar) was found and fixed.
-- **Tooling.** 92 offline tests, CI on Python 3.12 and 3.13, a Streamlit dashboard, and a reproducible `uv` environment.
+- **Tooling.** 115 offline tests, CI on Python 3.12 and 3.13, a Streamlit dashboard, and a reproducible `uv` environment.
 
 ## Roadmap
 
@@ -30,6 +30,7 @@ A self-improving **paper trading** bot for US ETFs. It evolves its own trading s
 - [x] **Experiment 2: volatility targeting with leverage.** Passed development, failed both untouched final tests ([results](docs/EXPERIMENTS_2.md)).
 - [x] **Experiment 3: leveraged trend following.** Research-led; cut drawdowns on 18 never-used ETFs, but did not beat buy & hold ([results](docs/EXPERIMENTS_3.md)).
 - [x] **Significance.** Deflated Sharpe ratios for every apparent win across 36 trials: none is significant ([report](reports/significance.md)).
+- [x] **Exploration rounds.** Every free macro signal plus a "must sit out ≥20%" rule, 4 rounds on frozen data: best Sharpe 1.02 vs 0.97 with a third of the drawdown, but no return edge ([log](docs/EXPLORATION.md)).
 - [ ] **Forward test (running).** Two live paper accounts from 22 Sep 2026, judged at 24 months ([plan](docs/FORWARD_TEST.md)).
 
 ## How the bot learns

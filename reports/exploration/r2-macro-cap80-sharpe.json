@@ -1,0 +1,147 @@
+{
+  "config": {
+    "name": "r2-macro-cap80-sharpe",
+    "description": "as r1 but fitness = own Sharpe (risk-adjusted), to find a higher-Sharpe strategy worth levering",
+    "objective": "sharpe",
+    "max_exposure": 0.8,
+    "macro": true,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "population": 60,
+    "generations": 25,
+    "train_start": "2007-01-01",
+    "first_test_year": 2012,
+    "test_years": 2
+  },
+  "trial": 38,
+  "period": "2012-01-03..2026-09-22",
+  "ensemble": {
+    "sharpe": 1.0230590242047486,
+    "bh_sharpe": 0.9681047061813765,
+    "cagr": 0.079358088872296,
+    "bh_cagr": 0.13214468585417927,
+    "max_drawdown": -0.12905146077204332,
+    "bh_max_drawdown": -0.3005372803197017,
+    "exposure": 0.5813203638656219,
+    "corr_with_bh": 0.7909282486397379,
+    "active_sharpe": -0.6019778261196734,
+    "psr": 0.013148274955926272,
+    "dsr": 8.120134453283976e-06,
+    "beats_bh": false
+  },
+  "seeds": [
+    {
+      "seed": 0,
+      "sharpe": 1.0395478840881103,
+      "bh_sharpe": 0.9681047061813765,
+      "cagr": 0.10355078671756712,
+      "bh_cagr": 0.13214468585417927,
+      "max_drawdown": -0.1627474400771658,
+      "bh_max_drawdown": -0.3005372803197017,
+      "exposure": 0.7372872196703593,
+      "corr_with_bh": 0.7398922101477391,
+      "active_sharpe": -0.32495264641071464,
+      "psr": 0.11056866587717538,
+      "dsr": 0.0003968928717046255,
+      "beats_bh": false,
+      "champions": [
+        "ENTRY copper_gold_mom(63) > -0.101 | EXIT (inflation_mom(126) > 0.005 OR rel_strength(126) > 0.196)",
+        "ENTRY copper_gold_mom(63) > -0.086 | EXIT ((inflation_mom(126) > 0.005 AND cyclical_mom(126) < 0.020) OR rel_strength(126) > 0.200)",
+        "ENTRY copper_gold_mom(63) > -0.079 | EXIT ((inflation_mom(126) > 0.005 AND cyclical_mom(126) < 0.003) OR (rel_strength(63) > 0.184 OR trend(20) > 0.037))",
+        "ENTRY copper_gold_mom(63) > -0.087 | EXIT ((inflation_mom(126) > 0.005 AND cyclical_mom(126) < 0.003) OR (rel_strength(63) > 0.172 OR trend(20) > 0.037))",
+        "ENTRY copper_gold_mom(63) > -0.087 | EXIT ((inflation_mom(126) > 0.005 AND cyclical_mom(126) < 0.021) OR (rel_strength(63) > 0.172 OR trend(20) > 0.050))",
+        "ENTRY copper_gold_mom(63) > -0.084 | EXIT ((inflation_mom(126) > 0.005 AND cyclical_mom(126) < 0.021) OR (rel_strength(63) > 0.172 OR trend(20) > 0.066))",
+        "ENTRY copper_gold_mom(63) > -0.087 | EXIT ((inflation_mom(126) > 0.005 AND cyclical_mom(126) < 0.016) OR (rel_strength(63) > 0.200 OR trend(20) > 0.066))"
+      ]
+    },
+    {
+      "seed": 1,
+      "sharpe": 0.7349621387140822,
+      "bh_sharpe": 0.9681047061813765,
+      "cagr": 0.054418954847159196,
+      "bh_cagr": 0.13214468585417927,
+      "max_drawdown": -0.15082427856080027,
+      "bh_max_drawdown": -0.3005372803197017,
+      "exposure": 0.3738449067819508,
+      "corr_with_bh": 0.564539840174571,
+      "active_sharpe": -0.6825605127994089,
+      "psr": 0.005233179810772264,
+      "dsr": 1.4119834449679019e-06,
+      "beats_bh": false,
+      "champions": [
+        "ENTRY oil_mom(126) < 0.38 | EXIT NOT copper_gold_mom(63) > 0.010",
+        "ENTRY copper_gold_mom(20) > 0.056 | EXIT NOT rsi(2) < 60.1",
+        "ENTRY copper_gold_mom(20) > 0.066 | EXIT rsi(2) > 66.1",
+        "ENTRY (copper_gold_mom(20) > 0.071 OR (copper_gold_mom(63) > 0.200 AND rsi(28) > 43.8)) | EXIT rsi(2) > 66.1",
+        "ENTRY (copper_gold_mom(20) > 0.072 OR (copper_gold_mom(63) > 0.117 AND rsi(28) > 43.8)) | EXIT rsi(2) > 66.8",
+        "ENTRY (copper_gold_mom(20) > 0.072 OR (copper_gold_mom(63) > 0.111 AND rsi(28) > 46.4)) | EXIT (rsi(2) > 62.9 AND skew < 127)",
+        "ENTRY (copper_gold_mom(20) > 0.072 OR (copper_gold_mom(63) > 0.104 AND rsi(28) > 43.8)) | EXIT (rsi(2) > 66.8 AND (skew < 127 AND small_large_mom(20) > -0.052))"
+      ]
+    },
+    {
+      "seed": 2,
+      "sharpe": 0.8161985683641431,
+      "bh_sharpe": 0.9681047061813765,
+      "cagr": 0.07690776954793366,
+      "bh_cagr": 0.13214468585417927,
+      "max_drawdown": -0.1659320357319477,
+      "bh_max_drawdown": -0.3005372803197017,
+      "exposure": 0.6328289651445556,
+      "corr_with_bh": 0.6996984539170286,
+      "active_sharpe": -0.5568326366641714,
+      "psr": 0.019036045322439493,
+      "dsr": 1.4407042160870028e-05,
+      "beats_bh": false,
+      "champions": [
+        "ENTRY copper_gold_mom(20) > 0.110 | EXIT NOT copper_gold_mom(63) > -0.106",
+        "ENTRY (copper_gold_mom(20) > 0.110 AND oil_mom(126) < 0.33) | EXIT NOT copper_gold_mom(63) > -0.137",
+        "ENTRY copper_gold_mom(20) > 0.097 | EXIT NOT copper_gold_mom(63) > -0.145",
+        "ENTRY (copper_gold_mom(20) > 0.108 OR rel_strength(20) > 0.072) | EXIT copper_gold_mom(63) < -0.141",
+        "ENTRY (copper_gold_mom(20) > 0.089 OR rel_strength(20) > 0.076) | EXIT copper_gold_mom(63) < -0.143",
+        "ENTRY (copper_gold_mom(20) > 0.094 OR rel_strength(20) > 0.074) | EXIT copper_gold_mom(63) < -0.145",
+        "ENTRY (copper_gold_mom(20) > 0.087 OR rel_strength(20) > 0.076) | EXIT copper_gold_mom(63) < -0.139"
+      ]
+    }
+  ],
+  "champion_building_blocks": [
+    [
+      "copper_gold_mom",
+      32
+    ],
+    [
+      "rel_strength",
+      11
+    ],
+    [
+      "rsi",
+      10
+    ],
+    [
+      "inflation_mom",
+      7
+    ],
+    [
+      "cyclical_mom",
+      6
+    ],
+    [
+      "trend",
+      5
+    ],
+    [
+      "oil_mom",
+      2
+    ],
+    [
+      "skew",
+      2
+    ],
+    [
+      "small_large_mom",
+      1
+    ]
+  ]
+}

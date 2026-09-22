@@ -60,6 +60,9 @@ class FitnessConfig:
     min_trades_per_year: float = 1.0
     min_exposure: float = 0.10
     cost_bps: float = DEFAULT_COST_BPS
+    # If set, rules invested more than this share of the time are heavily penalised,
+    # so the search cannot win by quietly becoming buy & hold (exploration rounds).
+    max_exposure: float | None = None
 
     def __post_init__(self) -> None:
         if self.objective not in OBJECTIVES:
@@ -108,4 +111,6 @@ def evaluate(
     if config.objective == "sharpe":
         fitness -= max(0.0, 1 - tpy / config.min_trades_per_year)
         fitness -= max(0.0, 1 - exposure / config.min_exposure)
+    if config.max_exposure is not None and exposure > config.max_exposure:
+        fitness -= 1.0 + 10 * (exposure - config.max_exposure)  # a cliff, then a slope
     return Evaluation(fitness, s_mean, s_std, tpy, exposure)

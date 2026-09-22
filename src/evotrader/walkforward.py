@@ -156,6 +156,10 @@ def run_fold(
         returns["evolved"], exposures["evolved"] = evolver.panel.portfolio(
             champion, fold.test_start, fold.test_end, fit_config.cost_bps)
         strategies: dict[str, Strategy] = baselines()
+    elif evolver.switch is not None:  # risk-on/off switch: one portfolio, stock share
+        returns["evolved"], exposures["evolved"] = evolver.switch.portfolio(
+            champion, fold.test_start, fold.test_end, fit_config.cost_bps)
+        strategies = baselines()
     else:
         strategies = {"evolved": GeneticStrategy(champion), **baselines()}
     for name, strat in strategies.items():
