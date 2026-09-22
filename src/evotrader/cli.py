@@ -291,6 +291,25 @@ def cmd_evolution(args: argparse.Namespace) -> None:
         print(f"  {len(df)} individuals -> {path.relative_to(ROOT)}\n  champion: {champ['rule']}")
 
 
+def cmd_experiment2(args: argparse.Namespace) -> None:
+    from evotrader import experiments2 as ex2
+
+    if args.summary:
+        v = ex2.verdict()
+        print(v.to_string() if len(v) else "No results yet.")
+        return
+    if args.stage is None:
+        raise SystemExit("--stage is required unless --summary is given")
+    ex2.check_allowed(args.stage)
+    results = ex2.run_stage(args.stage)
+    ex2.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    results.to_csv(ex2.result_path(args.stage), index=False)
+    cols = ["arm", "cagr", "sharpe", "volatility", "max_drawdown", "avg_exposure",
+            "days_levered", "beats_bh"]
+    print(f"\n{args.stage}\n")
+    print(results[cols].to_string(index=False, float_format=lambda v: f"{v:.3f}"))
+
+
 def cmd_experiment(args: argparse.Namespace) -> None:
     from evotrader import experiments as ex
     from evotrader.walkforward import load_datasets
@@ -383,6 +402,12 @@ def main(argv: list[str] | None = None) -> None:
     p_journal = paper_sub.add_parser("journal", parents=[db], help="Closed trades and why")
     p_journal.add_argument("-n", type=int, default=10)
     p_journal.set_defaults(func=cmd_paper_journal)
+
+    exp2 = sub.add_parser("experiment2",
+                          help="Pre-registered volatility-targeting test (docs/EXPERIMENTS_2.md)")
+    exp2.add_argument("--stage", choices=["dev", "final-us2000", "final-intl"])
+    exp2.add_argument("--summary", action="store_true", help="apply the pass rule")
+    exp2.set_defaults(func=cmd_experiment2)
 
     evo_rec = sub.add_parser("evolution", help="Record evolution runs for the visualiser")
     evo_rec.add_argument("--objective", choices=["both", "excess", "sharpe"], default="both")
