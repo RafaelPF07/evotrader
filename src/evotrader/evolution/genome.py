@@ -224,6 +224,7 @@ class GenomeFactory:
         self.rng = rng
         self.kinds = kinds
         self.max_depth = max_depth
+        self.last_op = ""  # what the latest mutate/crossover did, for the evolution log
 
     # --- generation -------------------------------------------------------
     def random_feature(self) -> FeatureSpec:
@@ -264,26 +265,37 @@ class GenomeFactory:
         tree: Node = getattr(genome, side)
         path, target = subtrees(tree)[self.rng.integers(len(subtrees(tree)))]
         child = replace(genome, **{side: replace_at(tree, path, self._mutate_node(target))})
-        return self._fit_depth(child, fallback=genome)
+        self.last_op = f"{self.last_op} ({side})"
+        result = self._fit_depth(child, fallback=genome)
+        if result is genome:
+            self.last_op = "mutation rejected (too deep)"
+        return result
 
     def _mutate_node(self, node: Node) -> Node:
         roll = self.rng.random()
         if isinstance(node, Compare):
             k = KINDS[node.feature.kind]
             if roll < 0.45:  # nudge threshold
+                self.last_op = "threshold nudged"
                 step = self.rng.normal(0, 0.1 * (k.hi - k.lo))
                 return Compare(node.feature, node.op, self._round(k.name, node.threshold + step))
             if roll < 0.65 and k.n_windows:  # new window lengths, same feature
+                self.last_op = "window changed"
                 return Compare(self._reroll_windows(node.feature), node.op, node.threshold)
             if roll < 0.75:  # flip direction
+                self.last_op = "comparison flipped"
                 return Compare(node.feature, ">" if node.op == "<" else "<", node.threshold)
             if roll < 0.9:  # grow: combine with a new condition
+                self.last_op = "condition added"
                 op = And if self.rng.random() < 0.6 else Or
                 return op(node, self.random_leaf())
+            self.last_op = "condition replaced"
             return self.random_leaf()
         if roll < 0.4 and node.children():  # shrink: keep one branch
+            self.last_op = "branch pruned"
             kids = node.children()
             return kids[self.rng.integers(len(kids))]
+        self.last_op = "subtree replaced"
         return self.random_tree(2)
 
     def _reroll_windows(self, spec: FeatureSpec) -> FeatureSpec:
@@ -300,7 +312,10 @@ class GenomeFactory:
         path, _ = spots[self.rng.integers(len(spots))]
         _, graft = donors[self.rng.integers(len(donors))]
         child = replace(a, **{side: replace_at(tree_a, path, graft)})
-        return self._fit_depth(child, fallback=a)
+        result = self._fit_depth(child, fallback=a)
+        self.last_op = ("crossover rejected (too deep)" if result is a and child is not a
+                        else f"crossover ({side})")
+        return result
 
     def _fit_depth(self, genome: Genome, fallback: Genome | None = None) -> Genome:
         if genome.depth <= self.max_depth + 1:  # +1 leaves room for exit = NOT(entry)

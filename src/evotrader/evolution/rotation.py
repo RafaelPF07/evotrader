@@ -155,6 +155,7 @@ class RotationFactory:
         self.rng = rng
         self.kinds = kinds
         self.max_n = max_n
+        self.last_op = ""
 
     def _feature(self) -> FeatureSpec:
         kind = KINDS[str(self.rng.choice(self.kinds))]
@@ -182,18 +183,24 @@ class RotationFactory:
         i = int(self.rng.integers(len(terms)))
         roll = self.rng.random()
         if roll < 0.35:  # nudge a weight
+            self.last_op = "weight nudged"
             w = round(float(np.clip(terms[i].weight + self.rng.normal(0, 0.25), -1, 1)), 2)
             terms[i] = Term(terms[i].feature, w)
         elif roll < 0.5:  # new feature for an existing term
+            self.last_op = "feature swapped"
             terms[i] = Term(self._feature(), terms[i].weight)
         elif roll < 0.6 and len(terms) < MAX_TERMS:
+            self.last_op = "term added"
             terms.append(self._term())
         elif roll < 0.7 and len(terms) > 1:
+            self.last_op = "term removed"
             terms.pop(i)
         elif roll < 0.85:
+            self.last_op = "holdings changed"
             step = int(self.rng.choice([-1, 1]))
             return replace(g, top_n=int(np.clip(g.top_n + step, 1, self.max_n)))
         else:
+            self.last_op = "rebalance changed"
             return replace(g, rebalance=int(self.rng.choice(REBALANCE_DAYS)))
         return replace(g, terms=tuple(terms))
 
@@ -202,4 +209,5 @@ class RotationFactory:
         k = int(self.rng.integers(1, min(MAX_TERMS, len(pool)) + 1))
         picks = self.rng.choice(len(pool), size=k, replace=False)
         parent = a if self.rng.random() < 0.5 else b
+        self.last_op = "crossover"
         return replace(parent, terms=tuple(pool[int(i)] for i in sorted(picks)))

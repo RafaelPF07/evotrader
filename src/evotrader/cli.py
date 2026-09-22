@@ -24,6 +24,7 @@ from evotrader.strategies import REGISTRY, BuyAndHold
 ROOT = Path(__file__).resolve().parents[2]
 MODELS_DIR = ROOT / "models"
 REPORTS_DIR = ROOT / "reports"
+EVOLUTION_DIR = REPORTS_DIR / "evolution"
 PCT = ["total_return", "cagr", "volatility", "max_drawdown", "exposure", "win_rate"]
 
 
@@ -255,6 +256,8 @@ def cmd_charts(args: argparse.Namespace) -> None:
         log = store.frame("SELECT date FROM learning_log")
         made.append(charts.paper_chart(equity_frame(store, trader.bars),
                                        list(pd.to_datetime(log["date"])), out))
+    made += [p for p in (charts.evolution_swarm_gif(EVOLUTION_DIR, out),
+                         charts.family_tree_chart(EVOLUTION_DIR, out)) if p is not None]
     for path in made:
         print(f"wrote {path.relative_to(ROOT)}")
 
@@ -266,6 +269,26 @@ def cmd_dashboard(args: argparse.Namespace) -> None:
     app = Path(__file__).with_name("dashboard.py")
     subprocess.run([sys.executable, "-m", "streamlit", "run", str(app), "--", "--db", args.db],
                    check=False)
+
+
+def cmd_evolution(args: argparse.Namespace) -> None:
+    """Record full evolution runs (every individual and its parents) for visualisation."""
+    from evotrader.evolution import EvolutionConfig
+    from evotrader.evolution import history as h
+    from evotrader.walkforward import load_datasets
+
+    datasets = load_datasets(data.DEFAULT_UNIVERSE, use_ml=False, log=lambda _: None)
+    objectives = ["excess", "sharpe"] if args.objective == "both" else [args.objective]
+    for objective in objectives:
+        print(f"Recording {objective} evolution ({args.start}..{args.end}, seed {args.seed})")
+        log = h.record_run(datasets, args.start, args.end, objective,
+                           EvolutionConfig(population=args.population,
+                                           generations=args.generations, seed=args.seed))
+        path = EVOLUTION_DIR / f"{objective}_seed{args.seed}.json"
+        h.save(log, path)
+        _, df = h.load(path)
+        champ = h.champion(df)
+        print(f"  {len(df)} individuals -> {path.relative_to(ROOT)}\n  champion: {champ['rule']}")
 
 
 def cmd_experiment(args: argparse.Namespace) -> None:
@@ -360,6 +383,16 @@ def main(argv: list[str] | None = None) -> None:
     p_journal = paper_sub.add_parser("journal", parents=[db], help="Closed trades and why")
     p_journal.add_argument("-n", type=int, default=10)
     p_journal.set_defaults(func=cmd_paper_journal)
+
+    evo_rec = sub.add_parser("evolution", help="Record evolution runs for the visualiser")
+    evo_rec.add_argument("--objective", choices=["both", "excess", "sharpe"], default="both")
+    evo_rec.add_argument("--start", default="2007-01-01")
+    evo_rec.add_argument("--end", default="2021-12-31",
+                         help="default stays out of the experiment's one-time holdout")
+    evo_rec.add_argument("--population", type=int, default=60)
+    evo_rec.add_argument("--generations", type=int, default=25)
+    evo_rec.add_argument("--seed", type=int, default=0)
+    evo_rec.set_defaults(func=cmd_evolution)
 
     exp = sub.add_parser("experiment", help="Pre-registered experiments (docs/EXPERIMENTS.md)")
     exp.add_argument("--stage", choices=["dev", "holdout"], required=True)

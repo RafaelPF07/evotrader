@@ -45,6 +45,7 @@ class GenerationStats:
 class EvolutionResult:
     hall_of_fame: list[tuple[Genome, Evaluation]]
     history: list[GenerationStats] = field(default_factory=list)
+    log: list[dict] = field(default_factory=list)  # every individual, if recording
 
     @property
     def best(self) -> tuple[Genome, Evaluation]:
@@ -67,6 +68,7 @@ class Evolver:
         fitness_config: FitnessConfig | None = None,
         seeds: Sequence[Genome] = (),
         space: str = "timing",
+        record: bool = False,
     ) -> None:
         self.datasets = datasets
         self.start, self.end = start, end
@@ -83,6 +85,7 @@ class Evolver:
         else:
             raise ValueError(f"unknown search space {space!r}")
         self.seeds = list(seeds)
+        self.record = record  # keep every individual, its parents and how it was made
         self._cache: dict[str, Evaluation] = {}
 
     def evaluate_window(self, genome: Genome, start: str, end: str) -> Evaluation:
@@ -97,50 +100,98 @@ class Evolver:
             self._cache[key] = self.evaluate_window(genome, self.start, self.end)
         return self._cache[key]
 
-    def _tournament(self, scored: list[tuple[Genome, Evaluation]]) -> Genome:
+    def _tournament(self, scored: list[Scored]) -> tuple[Genome, int]:
         picks = self.rng.choice(len(scored), size=self.config.tournament_size, replace=False)
-        return scored[min(picks)][0]  # `scored` is sorted best-first
+        winner = scored[min(picks)]  # `scored` is sorted best-first
+        return winner.genome, winner.id
 
-    def _offspring(self, scored: list[tuple[Genome, Evaluation]]) -> Genome:
-        cfg = self.config
+    def _offspring(self, scored: list[Scored]) -> Birth:
+        cfg, factory = self.config, self.factory
         if self.rng.random() < cfg.immigrant_rate:
-            return self.factory.random_genome()
+            return Birth(factory.random_genome(), "immigrant")
         if self.rng.random() < cfg.crossover_rate:
-            child = self.factory.crossover(self._tournament(scored), self._tournament(scored))
-            return self.factory.mutate(child) if self.rng.random() < 0.3 else child
-        return self.factory.mutate(self._tournament(scored))
+            (a, id_a), (b, id_b) = self._tournament(scored), self._tournament(scored)
+            child = factory.crossover(a, b)
+            origin = factory.last_op
+            if self.rng.random() < 0.3:
+                child = factory.mutate(child)
+                origin = f"{origin} + {factory.last_op}"
+            return Birth(child, origin, (id_a, id_b))
+        parent, parent_id = self._tournament(scored)
+        return Birth(factory.mutate(parent), factory.last_op, (parent_id,))
 
     def run(
         self, on_generation: Callable[[GenerationStats], None] | None = None
     ) -> EvolutionResult:
         cfg = self.config
-        population = self.seeds[: cfg.population]
+        population = [Birth(g, "seed") for g in self.seeds[: cfg.population]]
         while len(population) < cfg.population:
-            population.append(self.factory.random_genome())
+            population.append(Birth(self.factory.random_genome(), "random"))
         hall: dict[str, tuple[Genome, Evaluation]] = {}
         history: list[GenerationStats] = []
+        log: list[dict] = []
+        next_id = 0
 
         for gen in range(cfg.generations):
-            scored = sorted(
-                ((g, self.score(g)) for g in population), key=lambda ge: -ge[1].fitness
-            )
-            for g, e in scored:
-                hall.setdefault(str(g), (g, e))
+            members = [Scored(b.genome, self.score(b.genome), next_id + i, b)
+                       for i, b in enumerate(population)]
+            next_id += len(members)
+            scored = sorted(members, key=lambda m: -m.evaluation.fitness)
+            for m in scored:
+                hall.setdefault(str(m.genome), (m.genome, m.evaluation))
+            if self.record:
+                log += [_record(m, gen, rank) for rank, m in enumerate(scored)]
 
             stats = GenerationStats(
                 generation=gen,
-                best_fitness=scored[0][1].fitness,
-                mean_fitness=float(np.mean([e.fitness for _, e in scored])),
-                unique=len({str(g) for g, _ in scored}),
-                best_rule=str(scored[0][0]),
+                best_fitness=scored[0].evaluation.fitness,
+                mean_fitness=float(np.mean([m.evaluation.fitness for m in scored])),
+                unique=len({str(m.genome) for m in scored}),
+                best_rule=str(scored[0].genome),
             )
             history.append(stats)
             if on_generation:
                 on_generation(stats)
 
             if gen < cfg.generations - 1:
-                population = [g for g, _ in scored[: cfg.elite]]
+                population = [Birth(m.genome, "survivor", (m.id,)) for m in scored[: cfg.elite]]
                 population += [self._offspring(scored) for _ in range(cfg.population - cfg.elite)]
 
         ranked = sorted(hall.values(), key=lambda ge: -ge[1].fitness)
-        return EvolutionResult(ranked[: cfg.hall_of_fame], history)
+        return EvolutionResult(ranked[: cfg.hall_of_fame], history, log)
+
+
+@dataclass(frozen=True)
+class Birth:
+    """A genome plus how it came to exist: the raw material of the evolution log."""
+
+    genome: Genome
+    origin: str  # random | seed | immigrant | survivor | <mutation> | crossover (...) [+ ...]
+    parents: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
+class Scored:
+    genome: Genome
+    evaluation: Evaluation
+    id: int
+    birth: Birth
+
+
+def genome_kinds(genome) -> list[str]:
+    """Indicator kinds a genome uses (one entry per condition or term)."""
+    if hasattr(genome, "terms"):
+        return [t.feature.kind for t in genome.terms]
+    return [leaf.feature.kind for leaf in genome.entry.leaves() + genome.exit.leaves()]
+
+
+def _record(m: Scored, generation: int, rank: int) -> dict:
+    e = m.evaluation
+    return {
+        "id": m.id, "generation": generation, "rank": rank,
+        "origin": m.birth.origin, "parents": list(m.birth.parents),
+        "rule": str(m.genome), "genome": m.genome.to_dict(),
+        "fitness": e.fitness, "score": e.score_mean, "exposure": e.exposure,
+        "trades_per_year": e.trades_per_year, "size": m.genome.size,
+        "kinds": genome_kinds(m.genome),
+    }
