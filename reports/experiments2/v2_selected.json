@@ -1,0 +1,8 @@
+{
+  "lookback": 20,
+  "target_scale": 1.0,
+  "band": 0.25,
+  "cap": 1.5,
+  "min_history": 252,
+  "borrow_spread": 0.01
+}

@@ -18,7 +18,7 @@ A self-improving **paper trading** bot for US ETFs. It evolves its own trading s
   - It analyses its losing trades for patterns and re-evolves quarterly.
   - It swaps strategies only on held-out evidence.
 - **Leakage tests.** Tests scramble future prices and assert that no past decision, ML prediction or account entry changes. A live-only leak (Yahoo's partial intraday bar) was found and fixed.
-- **Tooling.** 64 offline tests, CI on Python 3.12 and 3.13, a Streamlit dashboard, and a reproducible `uv` environment.
+- **Tooling.** 72 offline tests, CI on Python 3.12 and 3.13, a Streamlit dashboard, and a reproducible `uv` environment.
 
 ## Roadmap
 
@@ -27,6 +27,7 @@ A self-improving **paper trading** bot for US ETFs. It evolves its own trading s
 - [x] **Phase 3: Paper trading loop.** Daily simulated broker, explained trade journal, mistake analysis, gated re-learning.
 - [x] **Phase 4: Showcase.** Dashboard, charts, seed-robustness study, CI, [design Q&A](docs/DESIGN_QA.md).
 - [x] **Experiment: beating buy & hold.** Pre-registered test of two ideas ([results](docs/EXPERIMENTS.md)).
+- [x] **Experiment 2: volatility targeting with leverage.** Passed development, failed both untouched final tests ([results](docs/EXPERIMENTS_2.md)).
 
 ## How the bot learns
 
@@ -103,6 +104,25 @@ Two ideas were tested under a protocol committed to git **before** any results e
 | 1 + 2 combined | 0.53 | 1/5 | fails, unstable across seeds |
 
 **Idea 1 closed the gap to buy & hold.** Aligning the fitness with the goal made the search converge on *hold, but briefly step aside after sharp short-term spikes*. That is buy & hold plus a small, consistent tweak: +0.1 percentage points a year on the holdout. It is consistent, but not a meaningful edge.
+
+## Experiment 2: volatility targeting with leverage
+
+Experiment 1's winner was just buy & hold, and forcing it not to be would only force bets without evidence. So a second pre-registered experiment ([docs/EXPERIMENTS_2.md](docs/EXPERIMENTS_2.md)) tested a well-documented alternative:
+- hold *more* when markets are calm and *less* when they are turbulent;
+- use up to **1.5× leverage**, with T-bill + 1% borrowing costs charged.
+
+It had to beat buy & hold on both return and Sharpe in development and in two one-time final tests the project had never used: **US 2000–2006** and **8 international ETFs**.
+
+| Version | Development (2007–21) | US 2000–06 | International 2004–26 |
+|---|---|---|---|
+| Buy & hold (CAGR / Sharpe) | 10.6% / 0.69 | 5.6% / 0.39 | 8.3% / 0.47 |
+| Vol targeting, 1.5× leverage | **12.9% / 0.88** ✅ | 5.7% / 0.37 ❌ | 7.4% / 0.44 ❌ |
+| Vol targeting, no leverage | 10.1% / 0.85 | 4.9% / 0.37 | 8.3% / **0.55**, drawdown -40% vs -60% |
+
+**It looked like a clear win in development and failed both final tests.**
+- **Why it failed.** Volatility targeting cuts exposure in *volatile* crashes (2008: -25% vs -44% internationally). But it stays levered through *slow, grinding* declines (2001–02, 2011, 2015, 2018, 2022) and amplifies them.
+- **Why development looked good.** The 2007–21 period happened to be dominated by the volatile kind of crash.
+- **What survived.** Used without leverage, it is a genuine risk-reduction tool: similar return and much smaller drawdowns in 2 of 3 tests. It is not a way to beat buy & hold.
 
 ## Paper trading loop
 

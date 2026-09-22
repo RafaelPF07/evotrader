@@ -61,13 +61,55 @@ Each final stage runs **once**. The code refuses to run it again. All results ar
 
 ## Results
 
-*Filled in after each stage runs. The numbers must come from `reports/experiments2/`.*
+All numbers come from `reports/experiments2/{dev,final-us2000,final-intl}.csv`. CAGR and Sharpe are the pass criteria; the other columns are for context.
 
-### Development
-_pending_
+### Development (US, 2007–2021)
 
-### Final: US 2000–2006
-_pending_
+| Arm | CAGR | Sharpe | Volatility | Max drawdown | Avg exposure | Beats B&H? |
+|---|---|---|---|---|---|---|
+| buy & hold | 10.6% | 0.69 | 16.8% | -43.4% | 100% | |
+| V0 (no leverage) | 10.1% | 0.85 | 12.2% | -29.1% | 90% | no (lower CAGR) |
+| **V1** (textbook, ≤1.5×) | **12.9%** | **0.88** | 15.2% | -29.4% | 121% | **yes** |
+| **V2** (tuned, ≤1.5×) | **14.1%** | **0.93** | 15.4% | -29.8% | 123% | **yes** |
 
-### Final: international
-_pending_
+V2's tuning selected lookback 20, scale 1.0 and **band 25%**. It is the textbook setting with a wider no-trade band.
+
+### Final: US 2000–2006 (run once)
+
+| Arm | CAGR | Sharpe | Volatility | Max drawdown | Avg exposure | Beats B&H? |
+|---|---|---|---|---|---|---|
+| buy & hold | 5.6% | 0.39 | 17.8% | -39.3% | 100% | |
+| V0 | 4.9% | 0.37 | 16.4% | -39.4% | 97% | no |
+| V1 | 5.7% | 0.37 | 20.7% | **-46.5%** | 130% | no (lower Sharpe) |
+| V2 | 5.6% | 0.37 | 20.6% | -46.5% | 128% | no |
+
+### Final: international, 2004 to today (run once)
+
+| Arm | CAGR | Sharpe | Volatility | Max drawdown | Avg exposure | Beats B&H? |
+|---|---|---|---|---|---|---|
+| buy & hold | 8.3% | 0.47 | 22.3% | -59.9% | 100% | |
+| **V0** | 8.3% | **0.55** | 17.3% | **-40.2%** | 93% | yes (by a hair on CAGR) |
+| V1 | 7.4% | 0.44 | 21.6% | -44.4% | 123% | no |
+| V2 | 8.2% | 0.48 | 21.6% | -42.6% | 121% | no |
+
+### Verdict
+
+**No arm beats buy & hold under the pre-registered rule.** The leveraged versions V1 and V2 passed development convincingly, then failed both final tests.
+
+**Why the development result didn't hold.** A year-by-year breakdown (diagnosis only; nothing was changed or re-run) shows a clear pattern:
+
+- **It works in volatile crashes.** When a crash comes with a volatility spike, exposure is cut hard and early. In 2008: 0.3–0.4× in the US, and international losses of -25% vs -44% for buy & hold. In March 2020: 0.21×.
+- **It fails in slow, grinding declines.** When prices fall *without* volatility spiking, the strategy stays levered all the way down:
+  - US: 2001 (-16.9% vs -9.2%) and 2002 (-25.3% vs -20.0%);
+  - international: 2011, 2014, 2015, 2018 and 2022.
+
+  Leverage amplifies every one of those losses, and borrowing costs add to them.
+- **It is most exposed at the start of a crash that begins from calm.** On 2020-02-14, just before COVID, exposure was at the maximum 1.5×. It reacts to turbulence; it cannot predict it.
+- **The long-run volatility estimate can mislead.** At the start of the US 2000–06 test it came from the turbulent dot-com crash (25% vs 18% realised afterwards). The strategy therefore judged conditions as calm and stayed levered ~90% of the time.
+- **Development flattered the idea.** 2007–2021 happened to be dominated by exactly the kind of crash volatility targeting handles well (2008, 2020). A single train/test split would have declared victory. The two untouched final tests are what caught it.
+
+**What did hold up: volatility targeting as risk control, not return.** Without leverage (V0), it cut the worst drawdown sharply in development (-29% vs -43%) and internationally (-40% vs -60%), at about the same return. In US 2000–06 it roughly matched buy & hold. So it is a defensible way to take *less* risk for similar return, but not a way to *beat* buy & hold.
+
+**Trial count after this experiment:**
+- **Configurations tested:** 3 (original bot + experiment 1) + 3 arms here, with 27 settings behind V2.
+- **Configurations that beat buy & hold under a pre-registered rule:** one, experiment 1's arm B, by a negligible margin.
