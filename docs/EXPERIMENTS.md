@@ -89,3 +89,25 @@ All numbers come from `reports/experiments/{dev,holdout}_{A,B,C,D}.csv`: means o
 **What this means for the live bot.** Arm B is a defensible replacement for the current rule. It closes the gap to buy & hold, which arm A never did, without claiming to beat it by a meaningful amount.
 
 **Trial count after this experiment: 4 configurations** (original, plus arms B, C, D). One passed.
+
+## Reproducibility (added after the experiment, 2026-09-22)
+
+The results above are exactly what the pre-registered runs produced. Nothing here re-judges them. However, a later reproduction check (`evotrader significance`) found that **arm B's pass is fragile**.
+
+**What happened.** The price data was re-downloaded from Yahoo after the holdout ran. The re-download changed prices by about **one part in a million**; buy & hold's holdout Sharpe moved from 0.886731 to 0.886732. Re-running arm B with the same seeds and code on the new data:
+
+| Seed | Recorded holdout Sharpe | Reproduced on re-downloaded data | Beats B&H (0.887)? |
+|---|---|---|---|
+| 0 | 0.921 | 0.921 | yes |
+| 1 | 0.865 | 0.865 | no |
+| 2 | 0.894 | 0.914 | yes |
+| 3 | 0.903 | 0.903 | yes |
+| 4 | **0.922** | **0.750** | **no** |
+
+**The code is not the cause.** Running the exact code that produced the recorded results (commit `6f9a42b`) on the new data gives the same reproduced numbers.
+
+**Why the data change matters so much.** The genetic algorithm is chaotic: a one-in-a-million change can flip a near-tie between two rules early on, and the search then evolves a different champion.
+
+**What it means.** On the re-downloaded data, arm B would have beaten buy & hold in **3 of 5 seeds** with a slightly **negative** mean excess Sharpe, i.e. it would **fail** the pass rule. Its recorded pass should be read as luck of the data snapshot, not as evidence of an edge. The deflated Sharpe ratios in [reports/significance.md](../reports/significance.md) agree: none of its seeds comes close to significance.
+
+**Lesson for future experiments:** freeze and fingerprint the exact data used by any one-time test, so that it can be reproduced bit for bit.

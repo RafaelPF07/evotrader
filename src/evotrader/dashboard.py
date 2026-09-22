@@ -142,6 +142,15 @@ def journal_tab(store: PaperStore) -> None:
 
 
 def learning_tab(store: PaperStore) -> None:
+    if store.get("strategy") == "trend":
+        rule = store.get("rule")
+        st.subheader("Strategy")
+        st.code(f"Hold each ETF at {rule['leverage']}x while it closes above its "
+                f"{rule['sma']}-day average; cash otherwise.", language=None)
+        st.caption("A fixed, pre-registered rule being forward-tested (docs/FORWARD_TEST.md). "
+                   "It never re-learns: the point is to see how it does on days nobody has "
+                   f"seen. Net interest so far: ${store.get('financing_total', 0.0):+,.2f}.")
+        return
     sid, genome = store.active_strategy()
     st.subheader("Active strategy")
     st.code(str(genome), language=None)
@@ -403,6 +412,13 @@ def main() -> None:
     st.caption("A self-improving paper trading bot. No real money involved.")
     colors = _colors()
     db = Path(_args().db)
+    accounts = sorted((ROOT / "data").glob("paper*.db"))
+    if len(accounts) > 1:  # e.g. the evolved bot and the forward-tested trend rule
+        labels = {"paper.db": "Evolved bot (live)",
+                  "paper_trend.db": "Trend + leverage (forward test)",
+                  "paper_v1_sharpe.db": "Evolved bot, original objective (archived)"}
+        db = st.selectbox("Account", accounts, index=accounts.index(db) if db in accounts else 0,
+                          format_func=lambda p: labels.get(p.name, p.name))
 
     tabs = st.tabs(["Paper account", "Trade journal", "Learning", "Evolution", "Research"])
     if not db.exists():

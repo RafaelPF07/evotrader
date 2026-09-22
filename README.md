@@ -18,7 +18,7 @@ A self-improving **paper trading** bot for US ETFs. It evolves its own trading s
   - It analyses its losing trades for patterns and re-evolves quarterly.
   - It swaps strategies only on held-out evidence.
 - **Leakage tests.** Tests scramble future prices and assert that no past decision, ML prediction or account entry changes. A live-only leak (Yahoo's partial intraday bar) was found and fixed.
-- **Tooling.** 82 offline tests, CI on Python 3.12 and 3.13, a Streamlit dashboard, and a reproducible `uv` environment.
+- **Tooling.** 92 offline tests, CI on Python 3.12 and 3.13, a Streamlit dashboard, and a reproducible `uv` environment.
 
 ## Roadmap
 
@@ -29,6 +29,8 @@ A self-improving **paper trading** bot for US ETFs. It evolves its own trading s
 - [x] **Experiment: beating buy & hold.** Pre-registered test of two ideas ([results](docs/EXPERIMENTS.md)).
 - [x] **Experiment 2: volatility targeting with leverage.** Passed development, failed both untouched final tests ([results](docs/EXPERIMENTS_2.md)).
 - [x] **Experiment 3: leveraged trend following.** Research-led; cut drawdowns on 18 never-used ETFs, but did not beat buy & hold ([results](docs/EXPERIMENTS_3.md)).
+- [x] **Significance.** Deflated Sharpe ratios for every apparent win across 36 trials: none is significant ([report](reports/significance.md)).
+- [ ] **Forward test (running).** Two live paper accounts from 22 Sep 2026, judged at 24 months ([plan](docs/FORWARD_TEST.md)).
 
 ## How the bot learns
 
@@ -100,11 +102,13 @@ Two ideas were tested under a protocol committed to git **before** any results e
 | Idea | Holdout Sharpe (B&H 0.89) | Seeds beating B&H | Verdict |
 |---|---|---|---|
 | Original bot (reference) | 0.79 | 0/5 | loses |
-| **1. Score rules against buy & hold, not by their own Sharpe** | **0.90** | **4/5** | passes, by a negligible margin |
+| **1. Score rules against buy & hold, not by their own Sharpe** | **0.90** | **4/5** | passed as recorded, by a negligible margin, but the pass is fragile (see below) |
 | 2. Rotate between ETFs (always invested) | 0.52 | 0/5 | fails: its "hold the calmest ETFs" rule beat B&H in the 2022 sell-off, then lagged the 2023–26 rally |
 | 1 + 2 combined | 0.53 | 1/5 | fails, unstable across seeds |
 
-**Idea 1 closed the gap to buy & hold.** Aligning the fitness with the goal made the search converge on *hold, but briefly step aside after sharp short-term spikes*. That is buy & hold plus a small, consistent tweak: +0.1 percentage points a year on the holdout. It is consistent, but not a meaningful edge.
+**Idea 1 closed the gap to buy & hold.** Aligning the fitness with the goal made the search converge on *hold, but briefly step aside after sharp short-term spikes*. That is buy & hold plus a small tweak: +0.1 percentage points a year on the holdout, which is not a meaningful edge.
+
+**Later reproducibility check.** A re-download of the price data changed prices by about one part in a million, and seed 4's result swung from 0.92 to 0.75. On the new data, idea 1 beats buy & hold in only 3/5 seeds, so it would **fail** the pass rule. The genetic algorithm is chaotic, so its "pass" was luck of the data snapshot. Details: [docs/EXPERIMENTS.md](docs/EXPERIMENTS.md#reproducibility-added-after-the-experiment-2026-09-22).
 
 ## Experiment 2: volatility targeting with leverage
 
@@ -139,6 +143,30 @@ Chosen from published research ([Gayed & Bilello 2016](https://papers.ssrn.com/s
 - **It lowered returns on 13 of them.** Leverage only made up the difference where crashes were very deep.
 
 **The pattern across all three experiments:** defensive rules reliably reduce risk on unseen data. Turning that into *more return than buy & hold* has never survived a pre-registered test.
+
+## Is any of it real? Correcting for 36 trials
+
+Try enough strategies and the best one will beat buy & hold by luck. The **deflated Sharpe ratio** ([Bailey & López de Prado 2014](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2460551)) is the probability that an edge is real *after* accounting for how many configurations were tried: 36 across this project. `evotrader significance` computes it on each apparent win's daily returns in excess of buy & hold:
+
+| Apparent win | Test period | Edge over B&H (annual Sharpe) | Probability it's real, allowing for 36 trials |
+|---|---|---|---|
+| Experiment 1, idea 1 (best seed) | holdout 2022–26 | +0.63 | 0.16 |
+| Experiment 2, vol targeting tuned | dev 2007–21 | +0.35 | 0.21 |
+| Experiment 3, trend + leverage | 13 countries | +0.02 | 0.02 |
+
+**Significance needs 0.95. Nothing gets close.** The full table is in [reports/significance.md](reports/significance.md). The formula is tested against a simulation of skill-less strategies.
+
+## Forward test: the only clean test left
+
+Instead of trying more ideas on the same history, two strategies now trade live on days nobody has seen, each with $100k of paper money, from **22 September 2026** ([plan, committed before the first trade](docs/FORWARD_TEST.md)):
+- **Evolved bot** (`data/paper.db`): the self-learning GA bot, re-learning quarterly.
+- **Trend + 1.5× leverage** (`data/paper_trend.db`): experiment 3's rule, fixed and never re-learned.
+
+They are judged against equal-weight buy & hold at **24 months**:
+- higher CAGR **and** Sharpe;
+- **and** a deflated Sharpe above 0.95.
+
+Realistically, two years can only detect an enormous edge. A good real-world edge (active Sharpe 0.3) would need about 30 years to confirm, or about 160 once 38 trials are accounted for. That is why this project does not claim to beat the market.
 
 ## Paper trading loop
 
