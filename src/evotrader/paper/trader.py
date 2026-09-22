@@ -110,10 +110,20 @@ class PaperTrader:
                 price = open_ * (1 + self.cost)
                 qty = order.qty if self.allow_borrowing else min(order.qty, s.cash / price)
                 s.cash = s.cash - qty * price
-                s.upsert_position(Position(order.ticker, qty, price, _day(d), order.reason))
+                held = positions.get(order.ticker)
+                if held is None:
+                    s.upsert_position(Position(order.ticker, qty, price, _day(d), order.reason))
+                else:  # adding to a position (ensemble accounts): average the cost
+                    total = held.qty + qty
+                    avg = (held.qty * held.avg_price + qty * price) / total
+                    s.upsert_position(Position(order.ticker, total, avg, held.entry_date,
+                                               held.entry_reason))
             else:
                 pos = positions[order.ticker]
-                qty, price = pos.qty, open_ * (1 - self.cost)
+                price = open_ * (1 - self.cost)
+                # Evolved and trend accounts always sell everything; ensemble accounts
+                # can trim part of a position. Either way each sale is a journal entry.
+                qty = pos.qty if order.qty >= pos.qty - 1e-9 else order.qty
                 s.cash = s.cash + qty * price
                 s.add_trade(
                     ticker=order.ticker, strategy_id=self._strategy_id(),
@@ -122,7 +132,11 @@ class PaperTrader:
                     **{"return": price / pos.avg_price - 1},
                     entry_reason=pos.entry_reason, exit_reason=order.reason,
                 )
-                s.delete_position(order.ticker)
+                if qty == pos.qty:
+                    s.delete_position(order.ticker)
+                else:
+                    s.upsert_position(Position(order.ticker, pos.qty - qty, pos.avg_price,
+                                               pos.entry_date, pos.entry_reason))
             s.mark_filled(order.id, _day(d), price, qty * open_ * self.cost)
             side = order.side.upper()
             self.log(f"{_day(d)}  {side:4} {order.ticker:4} {qty:10.3f} @ {price:.2f}")

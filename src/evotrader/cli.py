@@ -205,6 +205,17 @@ def _paper(args: argparse.Namespace, refresh: bool):
     default = getattr(args, "objective", "sharpe") if not store.initialised else "sharpe"
     objective = store.get("objective", default)
     strategy = store.get("strategy") or getattr(args, "strategy", "evolved")
+    if strategy == "ensemble":
+        import json
+
+        from evotrader.forward_models import MODEL_PATH, load_genomes
+        from evotrader.macro import attach_macro, derive, load_macro
+        from evotrader.paper.ensemble_trader import EnsemblePaperTrader
+
+        model = store.get("model") or json.loads(MODEL_PATH.read_text(encoding="utf-8"))
+        datasets = load_datasets(tickers, use_ml=False, refresh=refresh, log=lambda _: None)
+        datasets = attach_macro(datasets, derive(load_macro(refresh=refresh)))
+        return store, EnsemblePaperTrader(store, datasets, load_genomes(model))
     if strategy == "trend":
         from evotrader.paper.trend_trader import TrendPaperTrader
         from evotrader.trend import TrendLeverage
@@ -221,7 +232,14 @@ def _paper(args: argparse.Namespace, refresh: bool):
 
 def cmd_paper_init(args: argparse.Namespace) -> None:
     store, trader = _paper(args, refresh=True)
-    trader.init(args.capital, args.start)
+    if args.strategy == "ensemble":
+        import json
+
+        from evotrader.forward_models import MODEL_PATH
+
+        trader.init(args.capital, args.start, json.loads(MODEL_PATH.read_text(encoding="utf-8")))
+    else:
+        trader.init(args.capital, args.start)
     store.set("use_ml", args.ml and args.strategy == "evolved")
     store.commit()
     print(f"\nAccount created in {args.db}. Run `evotrader paper run` to trade up to today.")
@@ -477,9 +495,11 @@ def main(argv: list[str] | None = None) -> None:
     p_init.add_argument("--objective", choices=["excess", "sharpe"], default="excess",
                         help="what re-learning optimises: excess = beat buy & hold "
                              "(passed the pre-registered experiment); sharpe = original")
-    p_init.add_argument("--strategy", choices=["evolved", "trend"], default="evolved",
+    p_init.add_argument("--strategy", choices=["evolved", "trend", "ensemble"],
+                        default="evolved",
                         help="evolved = self-learning GA bot; trend = fixed leveraged "
-                             "200-day trend rule (the forward test, docs/FORWARD_TEST.md)")
+                             "200-day trend rule; ensemble = the frozen copper/gold rules "
+                             "(models/forward_copper_gold.json). See docs/FORWARD_TEST.md")
     p_init.add_argument("--leverage", type=float, default=1.5,
                         help="trend strategy only: leverage while above the average")
     p_init.set_defaults(func=cmd_paper_init)

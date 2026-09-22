@@ -1,0 +1,116 @@
+{
+  "name": "copper-gold ensemble (exploration round 2 recipe)",
+  "recipe": {
+    "objective": "sharpe",
+    "max_exposure": 0.8,
+    "macro": true,
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "population": 60,
+    "generations": 25,
+    "train_start": "2007-01-01",
+    "val_fraction": 0.25
+  },
+  "snapshot": "2026-09-22",
+  "data_fingerprint": "a5c9f0017e863e67573d8c7b398a7b9dde4c26d82484fe5996da3b2741d37448",
+  "trained": "2007-01-01..2021-10-17",
+  "validated": "2021-10-17..2026-09-22",
+  "created": "2026-09-22T22:57:42",
+  "rules": [
+    {
+      "seed": 0,
+      "rule": "ENTRY credit_mom(20) < -0.010 | EXIT copper_gold_mom(63) < -0.128",
+      "genome": {
+        "entry": {
+          "type": "cmp",
+          "feature": "credit_mom",
+          "windows": [
+            20
+          ],
+          "op": "<",
+          "threshold": -0.01
+        },
+        "exit": {
+          "type": "cmp",
+          "feature": "copper_gold_mom",
+          "windows": [
+            63
+          ],
+          "op": "<",
+          "threshold": -0.128
+        }
+      },
+      "train_fitness": 0.649788661100113,
+      "val_fitness": 0.16222176676352507,
+      "val_exposure": 0.6216653193209377
+    },
+    {
+      "seed": 1,
+      "rule": "ENTRY copper_gold_mom(63) > 0.086 | EXIT copper_gold_mom(63) < -0.034",
+      "genome": {
+        "entry": {
+          "type": "cmp",
+          "feature": "copper_gold_mom",
+          "windows": [
+            63
+          ],
+          "op": ">",
+          "threshold": 0.086
+        },
+        "exit": {
+          "type": "cmp",
+          "feature": "copper_gold_mom",
+          "windows": [
+            63
+          ],
+          "op": "<",
+          "threshold": -0.034
+        }
+      },
+      "train_fitness": 0.610009535235215,
+      "val_fitness": 0.28939806737620444,
+      "val_exposure": 0.24171382376717868
+    },
+    {
+      "seed": 2,
+      "rule": "ENTRY tom > 0.6 | EXIT (curve_chg(126) > -0.25 AND ma_spread(20,200) < 0.013)",
+      "genome": {
+        "entry": {
+          "type": "cmp",
+          "feature": "tom",
+          "windows": [],
+          "op": ">",
+          "threshold": 0.6
+        },
+        "exit": {
+          "type": "and",
+          "left": {
+            "type": "cmp",
+            "feature": "curve_chg",
+            "windows": [
+              126
+            ],
+            "op": ">",
+            "threshold": -0.25
+          },
+          "right": {
+            "type": "cmp",
+            "feature": "ma_spread",
+            "windows": [
+              20,
+              200
+            ],
+            "op": "<",
+            "threshold": 0.013
+          }
+        }
+      },
+      "train_fitness": 0.6584975284303106,
+      "val_fitness": 0.21189592594650983,
+      "val_exposure": 0.7354082457558611
+    }
+  ]
+}
