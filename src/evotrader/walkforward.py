@@ -69,10 +69,12 @@ def make_folds(
     return folds
 
 
-def load_datasets(tickers: list[str], use_ml: bool = True, log: Log = print) -> list[Dataset]:
+def load_datasets(
+    tickers: list[str], use_ml: bool = True, log: Log = print, refresh: bool = False
+) -> list[Dataset]:
     datasets = []
     for ticker in tickers:
-        bars = load(ticker, start="1990-01-01")
+        bars = load(ticker, start="1990-01-01", refresh=refresh)
         if use_ml:
             log(f"  {ticker}: ML signal (walk-forward, cached after first run)")
             bars = attach_ml_prob(ticker, bars)

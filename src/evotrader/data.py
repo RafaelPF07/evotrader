@@ -12,6 +12,7 @@ import pandas as pd
 
 CACHE_DIR = Path(__file__).resolve().parents[2] / "data" / "cache"
 COLUMNS = ["open", "high", "low", "close", "volume"]
+MARKET_CLOSE_MINUTES = 16 * 60 + 30  # 16:30 ET: close plus a buffer for final prices
 
 # Liquid ETFs that have existed for the whole test window. Using ETFs rather than
 # today's hand-picked winning stocks avoids most survivorship bias.
@@ -34,7 +35,20 @@ def download(ticker: str, start: str = "2005-01-01", end: str | None = None) -> 
     df = raw.rename(columns=str.lower)[COLUMNS]
     df.index = pd.to_datetime(df.index).tz_localize(None)
     df.index.name = "date"
-    return df.dropna()
+    return drop_incomplete(df.dropna())
+
+
+def drop_incomplete(df: pd.DataFrame, now: pd.Timestamp | None = None) -> pd.DataFrame:
+    """Remove today's bar while the US market is still open.
+
+    During trading hours Yahoo returns a partial bar whose 'close' is just the
+    latest price. Treating that as a real close would be a subtle live-only form
+    of look-ahead, so only completed sessions are kept (close 16:00 ET + buffer).
+    """
+    now = now if now is not None else pd.Timestamp.now(tz="America/New_York")
+    today = now.tz_localize(None).normalize() if now.tzinfo else now.normalize()
+    session_done = now.hour * 60 + now.minute >= MARKET_CLOSE_MINUTES
+    return df if session_done else df[df.index < today]
 
 
 def load(

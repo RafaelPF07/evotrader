@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from evotrader import indicators as ind
-from evotrader.data import validate
+from evotrader.data import drop_incomplete, validate
 from evotrader.metrics import cagr, max_drawdown, sharpe
 
 
@@ -36,6 +36,14 @@ def test_rsi_bounds(bars):
 def test_rsi_all_gains_is_100():
     r = ind.rsi(pd.Series(np.arange(1.0, 40.0)), window=14)
     assert r.dropna().eq(100).all()
+
+
+def test_partial_bar_dropped_while_market_open(bars):
+    today = bars.index[-1]
+    during = pd.Timestamp(today.date()).tz_localize("America/New_York") + pd.Timedelta(hours=14)
+    after = during + pd.Timedelta(hours=3)
+    assert drop_incomplete(bars, now=during).index[-1] < today
+    assert drop_incomplete(bars, now=after).index[-1] == today
 
 
 def test_validate_rejects_unsorted(bars):

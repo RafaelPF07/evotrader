@@ -3,6 +3,11 @@
     evotrader backtest --ticker SPY
     evotrader backtest --ticker QQQ --strategy sma_cross --param fast=20 --param slow=100
     evotrader compare
+    evotrader walkforward
+    evotrader paper init --start 2025-01-02
+    evotrader paper run
+    evotrader paper status
+    evotrader paper journal
 """
 
 from __future__ import annotations
@@ -141,6 +146,50 @@ def cmd_ml(args: argparse.Namespace) -> None:
     print("\nAUC 0.50 = coin flip. Anything reliably above ~0.52 on daily data is notable.")
 
 
+def _paper(args: argparse.Namespace, refresh: bool):
+    """Open the account database and load the universe it trades."""
+    from evotrader.paper import PaperStore, PaperTrader
+    from evotrader.walkforward import load_datasets
+
+    store = PaperStore(args.db)
+    tickers = store.get("tickers") or getattr(args, "tickers", data.DEFAULT_UNIVERSE)
+    use_ml = store.get("use_ml", getattr(args, "ml", False))
+    datasets = load_datasets(tickers, use_ml=use_ml, refresh=refresh, log=lambda _: None)
+    return store, PaperTrader(store, datasets)
+
+
+def cmd_paper_init(args: argparse.Namespace) -> None:
+    store, trader = _paper(args, refresh=True)
+    trader.init(args.capital, args.start)
+    store.set("use_ml", args.ml)
+    store.commit()
+    print(f"\nAccount created in {args.db}. Run `evotrader paper run` to trade up to today.")
+
+
+def cmd_paper_run(args: argparse.Namespace) -> None:
+    from evotrader.paper.report import status_text
+
+    store, trader = _paper(args, refresh=not args.no_refresh)
+    until = pd.Timestamp(args.until) if args.until else None
+    days = trader.run(until)
+    print(f"\nProcessed {days} trading day(s).\n")
+    print(status_text(store, trader.bars))
+
+
+def cmd_paper_status(args: argparse.Namespace) -> None:
+    from evotrader.paper.report import status_text
+
+    store, trader = _paper(args, refresh=False)
+    print(status_text(store, trader.bars))
+
+
+def cmd_paper_journal(args: argparse.Namespace) -> None:
+    from evotrader.paper import PaperStore
+    from evotrader.paper.report import journal_text
+
+    print(journal_text(PaperStore(args.db), args.n))
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="evotrader")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -183,6 +232,31 @@ def main(argv: list[str] | None = None) -> None:
 
     ml = sub.add_parser("ml", parents=[common, universe], help="ML signal diagnostics")
     ml.set_defaults(func=cmd_ml)
+
+    paper = sub.add_parser("paper", help="Self-learning paper trading account")
+    paper_sub = paper.add_subparsers(dest="paper_command", required=True)
+    db = argparse.ArgumentParser(add_help=False)
+    db.add_argument("--db", default=str(ROOT / "data" / "paper.db"))
+
+    p_init = paper_sub.add_parser("init", parents=[db], help="Create the account")
+    p_init.add_argument("--capital", type=float, default=100_000.0)
+    p_init.add_argument("--start", default=str(pd.Timestamp.today().date()),
+                        help="first trading day; a past date replays history honestly")
+    p_init.add_argument("--tickers", nargs="+", default=data.DEFAULT_UNIVERSE)
+    p_init.add_argument("--ml", action="store_true", help="let rules use the ML signal (slower)")
+    p_init.set_defaults(func=cmd_paper_init)
+
+    p_run = paper_sub.add_parser("run", parents=[db], help="Trade every day since the last run")
+    p_run.add_argument("--until", default=None)
+    p_run.add_argument("--no-refresh", action="store_true", help="don't download new prices")
+    p_run.set_defaults(func=cmd_paper_run)
+
+    p_status = paper_sub.add_parser("status", parents=[db], help="Account summary")
+    p_status.set_defaults(func=cmd_paper_status)
+
+    p_journal = paper_sub.add_parser("journal", parents=[db], help="Closed trades and why")
+    p_journal.add_argument("-n", type=int, default=10)
+    p_journal.set_defaults(func=cmd_paper_journal)
 
     args = parser.parse_args(argv)
     args.func(args)

@@ -191,6 +191,19 @@ class Genome:
         events[exit_] = 0.0
         return pd.Series(events).ffill().fillna(0.0).to_numpy()
 
+    def explain(self, store: FeatureStore, i: int) -> str:
+        """Why the rule says what it says on bar `i`: every condition with its live value."""
+        parts = []
+        for side, tree in (("entry", self.entry), ("exit", self.exit)):
+            conds = []
+            for leaf in tree.leaves():
+                value = store.get(leaf.feature)[i]
+                mark = "yes" if bool(leaf.evaluate(store)[i]) else "no"
+                conds.append(f"{leaf.feature}={value:.3f} {leaf.op} {leaf.threshold} [{mark}]")
+            fired = "FIRED" if bool(tree.evaluate(store)[i]) else "quiet"
+            parts.append(f"{side} {fired}: " + "; ".join(conds))
+        return " | ".join(parts)
+
     def to_dict(self) -> dict[str, Any]:
         return {"entry": self.entry.to_dict(), "exit": self.exit.to_dict()}
 
