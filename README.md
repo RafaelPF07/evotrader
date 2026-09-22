@@ -26,6 +26,7 @@ A self-improving **paper trading** bot for US ETFs. It evolves its own trading s
 - [x] **Phase 2: Learning engine.** Genetic programming over indicator rules, walk-forward ML signal, walk-forward validation.
 - [x] **Phase 3: Paper trading loop.** Daily simulated broker, explained trade journal, mistake analysis, gated re-learning.
 - [x] **Phase 4: Showcase.** Dashboard, charts, seed-robustness study, CI, [design Q&A](docs/DESIGN_QA.md).
+- [x] **Experiment: beating buy & hold.** Pre-registered test of two ideas ([results](docs/EXPERIMENTS.md)).
 
 ## How the bot learns
 
@@ -66,6 +67,21 @@ Walk-forward over 2016 to Sep 2026: an equal-weight portfolio across 10 ETFs, co
 - **Nothing was tuned after seeing test results.** An earlier single run showed a much better drawdown (-15.5%). The multi-seed study showed that was luck, so this table replaced it.
 
 ![Learning curve](docs/img/learning_curve.png)
+
+## Can it beat buy & hold? A pre-registered experiment
+
+Two ideas were tested under a protocol committed to git **before** any results existed ([docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)):
+- develop on data up to 2021 only, with the pass rule fixed in advance;
+- run a single, final holdout on 2022 to today for every idea, reporting all results.
+
+| Idea | Holdout Sharpe (B&H 0.89) | Seeds beating B&H | Verdict |
+|---|---|---|---|
+| Original bot (reference) | 0.79 | 0/5 | loses |
+| **1. Score rules against buy & hold, not by their own Sharpe** | **0.90** | **4/5** | passes, by a negligible margin |
+| 2. Rotate between ETFs (always invested) | 0.52 | 0/5 | fails: its "hold the calmest ETFs" rule beat B&H in the 2022 sell-off, then lagged the 2023–26 rally |
+| 1 + 2 combined | 0.53 | 1/5 | fails, unstable across seeds |
+
+**Idea 1 closed the gap to buy & hold.** Aligning the fitness with the goal made the search converge on *hold, but briefly step aside after sharp short-term spikes*. That is buy & hold plus a small, consistent tweak: +0.1 percentage points a year on the holdout. It is consistent, but not a meaningful edge.
 
 ## Paper trading loop
 
@@ -154,6 +170,7 @@ uv run evotrader paper status                    # equity, positions, strategy, 
 uv run evotrader paper journal                   # closed trades and why they happened
 uv run evotrader walkforward --seeds 5           # robustness across random seeds (~15 min)
 uv run evotrader charts                          # regenerate docs/img
+uv run evotrader experiment --stage dev --summary  # pre-registered experiment results
 ```
 
 ## Project layout

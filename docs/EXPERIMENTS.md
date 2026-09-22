@@ -54,12 +54,38 @@ Any future idea is a new arm and adds a trial.
 
 ## Results
 
-*Filled in after each stage runs. The numbers must come from `reports/experiments/`.*
+All numbers come from `reports/experiments/{dev,holdout}_{A,B,C,D}.csv`: means over seeds 0 to 4, equal-weight portfolio across the 10 ETFs, 5 bps costs. Buy & hold is equal-weight over the same days.
 
-### Development
+### Development (test windows 2012–2021)
 
-_pending_
+| Arm | Sharpe | B&H Sharpe | Mean excess Sharpe | Seeds beating B&H | CAGR vs B&H | Max drawdown vs B&H | Rule |
+|---|---|---|---|---|---|---|---|
+| A | 0.80 | 1.01 | -0.203 | 1/5 | 8.8% vs 13.7% | -24.9% vs -30.1% | fail |
+| **B** | **1.04** | 1.01 | **+0.027** | **5/5** | 13.7% vs 13.7% | -29.9% vs -30.1% | **pass** |
+| C | 0.91 | 1.01 | -0.097 | 2/5 | 10.4% vs 13.7% | -22.7% vs -30.1% | fail |
+| D | 0.85 | 1.01 | -0.156 | 1/5 | 12.5% vs 13.7% | -30.2% vs -30.1% | fail |
 
-### Holdout
+### Holdout (2022-01-01 to 2026-09-21, run once)
 
-_pending_
+| Arm | Sharpe | B&H Sharpe | Mean excess Sharpe | Seeds beating B&H | CAGR vs B&H | Max drawdown vs B&H | Rule |
+|---|---|---|---|---|---|---|---|
+| A | 0.79 | 0.89 | -0.098 | 0/5 | 8.3% vs 12.2% | -15.5% vs -18.5% | fail |
+| **B** | **0.90** | 0.89 | **+0.014** | **4/5** | 12.3% vs 12.2% | -18.3% vs -18.5% | **pass** |
+| C | 0.52 | 0.89 | -0.370 | 0/5 | 5.7% vs 12.2% | -20.2% vs -18.5% | fail |
+| D | 0.53 | 0.89 | -0.353 | 1/5 | 7.7% vs 12.2% | -24.7% vs -18.5% | fail |
+
+### Verdict
+
+**Arm B (idea 1) formally beats buy & hold under the pre-registered rule, in both stages. The margin is economically negligible.**
+
+- **What B learned.** It is invested 97–99.8% of the time. Its rules amount to "hold, but step out briefly after an unusually sharp short-term spike", e.g. `ENTRY trend(20) < 0.086 | EXIT trend(10) > 0.065`. Scoring against buy & hold taught the search that the best way not to lose to buy & hold is to *be* buy & hold, plus a small, consistent tweak.
+- **The edge is tiny.** Holdout: +0.014 Sharpe and +0.1 percentage points of CAGR per year. Over under five years that is far below what the data can distinguish from luck. It is consistent, but not a meaningful improvement.
+- **Idea 1 fixed what it was aimed at.** Arm A under-performed by -0.10 to -0.20 Sharpe because its fitness rewarded sitting in cash. Aligning the fitness with the goal removed that entire loss.
+
+**Idea 2 (rotation) failed, informatively.**
+- **Arm C** converged on *"hold the lowest-volatility ETFs"*, e.g. `ROTATE top 2 every 63d by -0.45*vol(63) +0.12*mom(252)`. Checked year by year on the holdout (seed 0), it did its job in the 2022 sell-off, holding mainly gold, healthcare and the Dow ETF: -7.7% vs -10.3% for buy & hold. It then lagged badly in the 2023–2026 rally (e.g. 2024: +4.2% vs +15.8%) because it kept holding calm, defensive ETFs while tech surged. This is the same trade-off that sank arm A: defence pays in crashes and costs in rising markets.
+- **Arm D** was unstable across seeds: holdout Sharpe ranged from -0.10 to 0.99. That is the signature of fitting noise.
+
+**What this means for the live bot.** Arm B is a defensible replacement for the current rule. It closes the gap to buy & hold, which arm A never did, without claiming to beat it by a meaningful amount.
+
+**Trial count after this experiment: 4 configurations** (original, plus arms B, C, D). One passed.
