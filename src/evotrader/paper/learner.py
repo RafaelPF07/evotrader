@@ -23,7 +23,7 @@ import pandas as pd
 
 from evotrader.backtest import extract_trades, simulate
 from evotrader.evolution.engine import EvolutionConfig, Evolver
-from evotrader.evolution.fitness import Dataset, Evaluation, FitnessConfig, evaluate
+from evotrader.evolution.fitness import Dataset, Evaluation, FitnessConfig, evaluate, truncate
 from evotrader.evolution.genome import And, Compare, Genome
 from evotrader.features import KINDS, FeatureSpec
 
@@ -83,11 +83,6 @@ class Decision:
             "lesson: none - no entry filter would have removed more losing than winning return"
         ]
         return "\n".join(lines)
-
-
-def truncate(datasets: list[Dataset], end: pd.Timestamp) -> list[Dataset]:
-    """Datasets that physically contain no bars after `end`, so no code path can peek."""
-    return [Dataset(ds.ticker, ds.bars.loc[:end]) for ds in datasets]
 
 
 def _windows(datasets: list[Dataset], end: pd.Timestamp, holdout: int) -> tuple[str, str, str]:

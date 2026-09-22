@@ -70,6 +70,7 @@ class PaperTrader:
         s.set("last_processed", _day(anchor))
         s.set("last_relearn", _day(anchor))
         s.set("relearn_count", 0)
+        s.set("objective", self.learner.fitness.objective)
         s.set_hall_of_fame(hall)
         s.activate_strategy(champion, _day(anchor), "initial")
         s.record_equity(_day(anchor), capital, 0.0)

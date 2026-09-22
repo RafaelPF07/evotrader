@@ -19,6 +19,12 @@ def sharpe(returns: pd.Series) -> float:
     return float(returns.mean() / std * np.sqrt(TRADING_DAYS)) if std > 0 else 0.0
 
 
+def information_ratio(active: pd.Series) -> float:
+    """Annualised mean / volatility of returns *relative to a benchmark*."""
+    std = active.std()
+    return float(active.mean() / std * np.sqrt(TRADING_DAYS)) if std > 1e-12 else 0.0
+
+
 def sortino(returns: pd.Series) -> float:
     downside = np.sqrt((returns.clip(upper=0) ** 2).mean())
     return float(returns.mean() / downside * np.sqrt(TRADING_DAYS)) if downside > 0 else 0.0

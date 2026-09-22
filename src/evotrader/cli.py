@@ -192,14 +192,20 @@ def cmd_ml(args: argparse.Namespace) -> None:
 
 def _paper(args: argparse.Namespace, refresh: bool):
     """Open the account database and load the universe it trades."""
-    from evotrader.paper import PaperStore, PaperTrader
+    from evotrader.evolution.fitness import FitnessConfig
+    from evotrader.paper import LearnerConfig, PaperStore, PaperTrader
     from evotrader.walkforward import load_datasets
 
     store = PaperStore(args.db)
     tickers = store.get("tickers") or getattr(args, "tickers", data.DEFAULT_UNIVERSE)
     use_ml = store.get("use_ml", getattr(args, "ml", False))
+    # An account always re-learns with the objective it was created with. Accounts
+    # created before objectives existed used "sharpe".
+    default = getattr(args, "objective", "sharpe") if not store.initialised else "sharpe"
+    objective = store.get("objective", default)
+    learner = LearnerConfig(fitness=FitnessConfig(objective=objective))
     datasets = load_datasets(tickers, use_ml=use_ml, refresh=refresh, log=lambda _: None)
-    return store, PaperTrader(store, datasets)
+    return store, PaperTrader(store, datasets, learner)
 
 
 def cmd_paper_init(args: argparse.Namespace) -> None:
@@ -262,6 +268,27 @@ def cmd_dashboard(args: argparse.Namespace) -> None:
                    check=False)
 
 
+def cmd_experiment(args: argparse.Namespace) -> None:
+    from evotrader import experiments as ex
+    from evotrader.walkforward import load_datasets
+
+    if args.summary:
+        table = ex.summary_table(args.stage)
+        print(table.to_string(index=False) if len(table) else "No results yet.")
+        return
+    if args.arm is None:
+        raise SystemExit("--arm is required unless --summary is given")
+    ex.check_allowed(args.stage, args.arm)
+    datasets = load_datasets(data.DEFAULT_UNIVERSE, use_ml=False, log=lambda _: None)
+    results = ex.run_arm(ex.ARMS[args.arm], args.stage, datasets)
+    ex.RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    results.to_csv(ex.result_path(args.stage, args.arm), index=False)
+    v = ex.verdict(results)
+    print(f"\nArm {args.arm} ({args.stage}): mean excess Sharpe {v['mean_excess_sharpe']:+.3f}, "
+          f"{v['seeds_beating']}/{len(results)} seeds beat buy & hold -> "
+          f"{'PASS' if v['passed'] else 'FAIL'}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="evotrader")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -317,6 +344,9 @@ def main(argv: list[str] | None = None) -> None:
                         help="first trading day; a past date replays history honestly")
     p_init.add_argument("--tickers", nargs="+", default=data.DEFAULT_UNIVERSE)
     p_init.add_argument("--ml", action="store_true", help="let rules use the ML signal (slower)")
+    p_init.add_argument("--objective", choices=["excess", "sharpe"], default="excess",
+                        help="what re-learning optimises: excess = beat buy & hold "
+                             "(passed the pre-registered experiment); sharpe = original")
     p_init.set_defaults(func=cmd_paper_init)
 
     p_run = paper_sub.add_parser("run", parents=[db], help="Trade every day since the last run")
@@ -330,6 +360,12 @@ def main(argv: list[str] | None = None) -> None:
     p_journal = paper_sub.add_parser("journal", parents=[db], help="Closed trades and why")
     p_journal.add_argument("-n", type=int, default=10)
     p_journal.set_defaults(func=cmd_paper_journal)
+
+    exp = sub.add_parser("experiment", help="Pre-registered experiments (docs/EXPERIMENTS.md)")
+    exp.add_argument("--stage", choices=["dev", "holdout"], required=True)
+    exp.add_argument("--arm", choices=["A", "B", "C", "D"])
+    exp.add_argument("--summary", action="store_true", help="show results for the stage")
+    exp.set_defaults(func=cmd_experiment)
 
     ch = sub.add_parser("charts", parents=[db], help="Regenerate README charts in docs/img")
     ch.set_defaults(func=cmd_charts)

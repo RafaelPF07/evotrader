@@ -19,7 +19,7 @@ import pandas as pd
 from evotrader.backtest import simulate
 from evotrader.data import load
 from evotrader.evolution.engine import EvolutionConfig, Evolver, GenerationStats
-from evotrader.evolution.fitness import Dataset, FitnessConfig, evaluate
+from evotrader.evolution.fitness import Dataset, FitnessConfig
 from evotrader.evolution.genome import Genome
 from evotrader.evolution.strategy import GeneticStrategy
 from evotrader.metrics import compute_metrics
@@ -132,11 +132,12 @@ def run_fold(
     fit_config: FitnessConfig,
     seeds: list[Genome],
     log: Log = print,
+    space: str = "timing",
 ) -> FoldResult:
     log(f"\n{fold}")
     last_train_day = fold.val_start - pd.Timedelta(days=1)
     evolver = Evolver(datasets, str(fold.train_start.date()), str(last_train_day.date()),
-                      evo_config, fit_config, seeds=seeds)
+                      evo_config, fit_config, seeds=seeds, space=space)
     result = evolver.run(
         lambda s: log(f"  gen {s.generation:>2}  best {s.best_fitness:+.3f}  "
                       f"mean {s.mean_fitness:+.3f}  unique {s.unique}")
@@ -144,20 +145,24 @@ def run_fold(
 
     # Choose the champion on validation data the GA never trained on.
     val = [
-        (g, e, evaluate(g, datasets, str(fold.val_start.date()), str(fold.train_end.date()),
-                        fit_config))
+        (g, e, evolver.evaluate_window(g, str(fold.val_start.date()), str(fold.train_end.date())))
         for g, e in result.hall_of_fame
     ]
     champion, train_eval, val_eval = max(val, key=lambda t: t[2].fitness)
     log(f"  champion (train {train_eval.fitness:+.3f}, val {val_eval.fitness:+.3f}): {champion}")
 
-    strategies: dict[str, Strategy] = {"evolved": GeneticStrategy(champion), **baselines()}
     metrics, returns, exposures = {}, {}, {}
+    if evolver.panel is not None:  # rotation: one portfolio, not one strategy per ticker
+        returns["evolved"], exposures["evolved"] = evolver.panel.portfolio(
+            champion, fold.test_start, fold.test_end, fit_config.cost_bps)
+        strategies: dict[str, Strategy] = baselines()
+    else:
+        strategies = {"evolved": GeneticStrategy(champion), **baselines()}
     for name, strat in strategies.items():
-        r, exposure = portfolio_returns(strat, datasets, fold.test_start, fold.test_end,
-                                        fit_config.cost_bps)
-        returns[name], exposures[name] = r, exposure
-        metrics[name] = compute_metrics(r, exposure)
+        returns[name], exposures[name] = portfolio_returns(
+            strat, datasets, fold.test_start, fold.test_end, fit_config.cost_bps)
+    for name in returns:
+        metrics[name] = compute_metrics(returns[name], exposures[name])
     log("  test Sharpe: " + "  ".join(f"{k} {v['sharpe']:+.2f}" for k, v in metrics.items()))
     return FoldResult(fold, champion, train_eval.fitness, val_eval.fitness,
                       [g for g, _ in result.hall_of_fame], result.history, metrics, returns,
@@ -171,6 +176,7 @@ def run_walkforward(
     fit_config: FitnessConfig | None = None,
     carry_over: bool = True,
     log: Log = print,
+    space: str = "timing",
 ) -> WalkForwardReport:
     """Run every fold. With `carry_over`, each fold's hall of fame seeds the next
     fold's population, so the bot keeps building on what it learned before."""
@@ -179,7 +185,7 @@ def run_walkforward(
     results: list[FoldResult] = []
     seeds: list[Genome] = []
     for fold in folds:
-        res = run_fold(fold, datasets, evo_config, fit_config, seeds, log)
+        res = run_fold(fold, datasets, evo_config, fit_config, seeds, log, space)
         results.append(res)
         if carry_over:
             seeds = [res.champion, *(g for g in res.hall_of_fame if g != res.champion)]

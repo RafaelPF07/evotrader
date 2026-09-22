@@ -26,6 +26,7 @@ A self-improving **paper trading** bot for US ETFs. It evolves its own trading s
 - [x] **Phase 2: Learning engine.** Genetic programming over indicator rules, walk-forward ML signal, walk-forward validation.
 - [x] **Phase 3: Paper trading loop.** Daily simulated broker, explained trade journal, mistake analysis, gated re-learning.
 - [x] **Phase 4: Showcase.** Dashboard, charts, seed-robustness study, CI, [design Q&A](docs/DESIGN_QA.md).
+- [x] **Experiment: beating buy & hold.** Pre-registered test of two ideas ([results](docs/EXPERIMENTS.md)).
 
 ## How the bot learns
 
@@ -67,6 +68,21 @@ Walk-forward over 2016 to Sep 2026: an equal-weight portfolio across 10 ETFs, co
 
 ![Learning curve](docs/img/learning_curve.png)
 
+## Can it beat buy & hold? A pre-registered experiment
+
+Two ideas were tested under a protocol committed to git **before** any results existed ([docs/EXPERIMENTS.md](docs/EXPERIMENTS.md)):
+- develop on data up to 2021 only, with the pass rule fixed in advance;
+- run a single, final holdout on 2022 to today for every idea, reporting all results.
+
+| Idea | Holdout Sharpe (B&H 0.89) | Seeds beating B&H | Verdict |
+|---|---|---|---|
+| Original bot (reference) | 0.79 | 0/5 | loses |
+| **1. Score rules against buy & hold, not by their own Sharpe** | **0.90** | **4/5** | passes, by a negligible margin |
+| 2. Rotate between ETFs (always invested) | 0.52 | 0/5 | fails: its "hold the calmest ETFs" rule beat B&H in the 2022 sell-off, then lagged the 2023–26 rally |
+| 1 + 2 combined | 0.53 | 1/5 | fails, unstable across seeds |
+
+**Idea 1 closed the gap to buy & hold.** Aligning the fitness with the goal made the search converge on *hold, but briefly step aside after sharp short-term spikes*. That is buy & hold plus a small, consistent tweak: +0.1 percentage points a year on the holdout. It is consistent, but not a meaningful edge.
+
 ## Paper trading loop
 
 `evotrader paper run` processes every trading day since the last run, in the same order the backtester assumes:
@@ -96,16 +112,23 @@ Live runs also discard today's partial bar while the market is open.
 
 ### Replay results: Jan 2025 to Sep 2026
 
+The live account re-learns with **idea 1's objective** (beat buy & hold), the only change that survived the [pre-registered experiment](docs/EXPERIMENTS.md). The original account is kept for comparison in `data/paper_v1_sharpe.db`. Both were replayed over the same days, and each first champion was trained only on data before 2025.
+
 ![Paper account](docs/img/paper_equity.png)
 
-| | paper account | equal-weight buy & hold |
-|---|---|---|
-| return | +31.0% | +37.1% |
-| Sharpe | 1.28 | |
-| max drawdown | -14.4% | |
-| closed trades | 64 (80% winners, avg +3.6%) | |
+| | live account (beat-B&H objective) | original account (Sharpe objective) | equal-weight buy & hold |
+|---|---|---|---|
+| return | +33.1% | +31.0% | +37.1% |
+| Sharpe | 1.31 | 1.28 | |
+| max drawdown | -14.4% | -14.4% | |
+| closed trades | 8 | 64 | |
+| strategy changes | 1 (July 2025) | 0 | |
 
-In all six re-learning rounds the champion was **kept**: no challenger beat it on unseen data by the required margin. Mistake analysis found no entry filter that would have removed more losing than winning return. The losers of this "stay invested, take profit on sharp spikes" rule look just like the winners at entry, which is itself a useful, honest result.
+**What happened:**
+- **It trades far less.** As in the experiment, the new objective makes the bot behave like buy & hold with a few exits: 8 trades instead of 64.
+- **It changed strategy once.** At the July 2025 re-learning, a challenger beat the champion on the held-out year by a wide margin (+0.05 vs -0.42) and was promoted.
+- **Most of the gap is one exit.** It stayed within about 1.5 points of buy & hold until spring 2026. Most of today's 4-point gap opened when it sold XLK (tech) in mid-April 2026 and missed a 16% rise before buying back in mid-May.
+- **Mistake analysis found no lessons.** No entry filter would have removed more losing than winning return.
 
 ### Running it daily
 
@@ -154,6 +177,7 @@ uv run evotrader paper status                    # equity, positions, strategy, 
 uv run evotrader paper journal                   # closed trades and why they happened
 uv run evotrader walkforward --seeds 5           # robustness across random seeds (~15 min)
 uv run evotrader charts                          # regenerate docs/img
+uv run evotrader experiment --stage dev --summary  # pre-registered experiment results
 ```
 
 ## Project layout

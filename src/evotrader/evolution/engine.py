@@ -15,6 +15,7 @@ import numpy as np
 
 from evotrader.evolution.fitness import Dataset, Evaluation, FitnessConfig, evaluate
 from evotrader.evolution.genome import Genome, GenomeFactory
+from evotrader.evolution.rotation import Panel, RotationFactory, evaluate_rotation
 from evotrader.features import ML_COLUMN, PRICE_KINDS
 
 
@@ -65,22 +66,35 @@ class Evolver:
         config: EvolutionConfig | None = None,
         fitness_config: FitnessConfig | None = None,
         seeds: Sequence[Genome] = (),
+        space: str = "timing",
     ) -> None:
         self.datasets = datasets
         self.start, self.end = start, end
         self.config = config or EvolutionConfig()
         self.fitness_config = fitness_config or FitnessConfig()
         self.rng = np.random.default_rng(self.config.seed)
-        self.factory = GenomeFactory(self.rng, available_kinds(datasets), self.config.max_depth)
+        kinds = available_kinds(datasets)
+        if space == "rotation":
+            self.panel: Panel | None = Panel(datasets)
+            self.factory = RotationFactory(self.rng, kinds)
+        elif space == "timing":
+            self.panel = None
+            self.factory = GenomeFactory(self.rng, kinds, self.config.max_depth)
+        else:
+            raise ValueError(f"unknown search space {space!r}")
         self.seeds = list(seeds)
         self._cache: dict[str, Evaluation] = {}
+
+    def evaluate_window(self, genome: Genome, start: str, end: str) -> Evaluation:
+        """Score any genome of this search space on an arbitrary date window."""
+        if self.panel is not None:
+            return evaluate_rotation(genome, self.panel, start, end, self.fitness_config)
+        return evaluate(genome, self.datasets, start, end, self.fitness_config)
 
     def score(self, genome: Genome) -> Evaluation:
         key = str(genome)
         if key not in self._cache:
-            self._cache[key] = evaluate(
-                genome, self.datasets, self.start, self.end, self.fitness_config
-            )
+            self._cache[key] = self.evaluate_window(genome, self.start, self.end)
         return self._cache[key]
 
     def _tournament(self, scored: list[tuple[Genome, Evaluation]]) -> Genome:
