@@ -17,6 +17,21 @@ def benchmark_return(bars: dict[str, pd.DataFrame], start: str, end: str) -> flo
     return sum(rets) / len(rets)
 
 
+def equity_frame(store: PaperStore, bars: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Daily account equity next to an equal-weight buy & hold of the same universe,
+    both starting from the same capital. Used by the charts and the dashboard."""
+    eq = store.frame("SELECT date, equity FROM equity ORDER BY date")
+    eq["date"] = pd.to_datetime(eq["date"])
+    eq = eq.set_index("date")["equity"]
+    start = eq.index[0]
+    growth = pd.concat(
+        [b["close"].loc[start:eq.index[-1]] / b["close"].loc[:start].iloc[-1]
+         for b in bars.values()], axis=1
+    ).ffill().mean(axis=1)
+    benchmark = growth.reindex(eq.index).ffill() * store.get("initial_capital")
+    return pd.DataFrame({"equity": eq, "benchmark": benchmark})
+
+
 def status_text(store: PaperStore, bars: dict[str, pd.DataFrame]) -> str:
     eq = store.frame("SELECT date, equity FROM equity ORDER BY date").set_index("date")["equity"]
     capital = store.get("initial_capital")

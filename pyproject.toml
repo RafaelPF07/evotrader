@@ -11,6 +11,13 @@ dependencies = [
     "yfinance>=0.2.50",
 ]
 
+[project.optional-dependencies]
+dashboard = [
+    "matplotlib>=3.9",
+    "plotly>=5.24",
+    "streamlit>=1.40",
+]
+
 [project.scripts]
 evotrader = "evotrader.cli:main"
 

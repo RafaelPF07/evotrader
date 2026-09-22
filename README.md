@@ -1,15 +1,31 @@
 # EvoTrader
 
-A self-improving **paper trading** bot for US ETFs. It evolves its own trading strategies with a genetic algorithm, uses machine learning signals as building blocks, and only promotes a strategy after it passes out-of-sample, walk-forward validation. No real money is involved.
+[![CI](https://github.com/RafaelPF07/evotrader/actions/workflows/ci.yml/badge.svg)](https://github.com/RafaelPF07/evotrader/actions/workflows/ci.yml)
 
-> Status: **Phase 3 of 4**. The self-learning paper trading loop is running.
+A self-improving **paper trading** bot for US ETFs. It evolves its own trading strategies with genetic programming, can use a machine-learning signal as a building block, and trades a simulated account every day. It promotes a new strategy only when the strategy wins on data it has never seen. No real money is involved.
+
+**The honest headline:** the learning works, in that it rediscovers a known market effect from scratch and improves across generations, but **it does not beat buy & hold**. This repository is about measuring that correctly: no look-ahead, costs always on, walk-forward testing, multiple random seeds, and every trade explained.
+
+![Out-of-sample equity](docs/img/walkforward_equity.png)
+
+## Highlights
+
+- **Genetic programming** over entry and exit rule trees, scored across 10 ETFs at once so that rules must generalise.
+- **Walk-forward evaluation** (2016 to today, five 2-year test windows), repeated over **5 random seeds**, with the spread reported rather than the best run.
+- **Purged, walk-forward ML signal** (gradient boosting). It is honestly reported as a coin flip, with AUC around 0.51.
+- **Self-learning paper account.**
+  - It runs every trading day and keeps a SQLite journal that explains each trade with live indicator values.
+  - It analyses its losing trades for patterns and re-evolves quarterly.
+  - It swaps strategies only on held-out evidence.
+- **Leakage tests.** Tests scramble future prices and assert that no past decision, ML prediction or account entry changes. A live-only leak (Yahoo's partial intraday bar) was found and fixed.
+- **Tooling.** 42 offline tests, CI on Python 3.12 and 3.13, a Streamlit dashboard, and a reproducible `uv` environment.
 
 ## Roadmap
 
 - [x] **Phase 1: Foundation.** Data cache, look-ahead-proof backtester, costs, metrics, baseline strategies, tests.
 - [x] **Phase 2: Learning engine.** Genetic programming over indicator rules, walk-forward ML signal, walk-forward validation.
 - [x] **Phase 3: Paper trading loop.** Daily simulated broker, explained trade journal, mistake analysis, gated re-learning.
-- [ ] **Phase 4: Showcase.** Dashboard, results write-up, CI.
+- [x] **Phase 4: Showcase.** Dashboard, charts, seed-robustness study, CI, [design Q&A](docs/DESIGN_QA.md).
 
 ## How the bot learns
 
@@ -31,23 +47,25 @@ A `HistGradientBoostingClassifier` predicts whether a position opened at the nex
 
 ## Results (honest, out-of-sample)
 
-Walk-forward over 2016 to Sep 2026: an equal-weight portfolio across 10 ETFs, costs included. Every test period was unseen by both evolution and selection. See [reports/walkforward.md](reports/walkforward.md) for the full breakdown.
+Walk-forward over 2016 to Sep 2026: an equal-weight portfolio across 10 ETFs, costs included. Each test window was unseen by both evolution and champion selection. Because a genetic algorithm is a random search, the **whole evaluation was repeated with 5 seeds**. See [reports/walkforward.md](reports/walkforward.md) for per-fold details.
 
-| strategy | CAGR | Sharpe | max drawdown | exposure |
-|---|---|---|---|---|
-| **evolved** | 8.2% | 0.81 | **-15.5%** | 78% |
-| buy & hold | 14.0% | 0.96 | -30.1% | 100% |
-| SMA 50/200 | 8.9% | 0.84 | -23.7% | 74% |
-| momentum | 8.1% | 0.91 | -14.4% | 72% |
-| ML only | 5.3% | 0.58 | -24.7% | 55% |
+| strategy | CAGR | Sharpe | max drawdown |
+|---|---|---|---|
+| **evolved, mean of 5 seeds** (range) | **8.8%** (7.6 to 10.2) | **0.81** (0.74 to 0.92) | **-25.6%** (-21.2 to -30.0) |
+| buy & hold | 14.0% | 0.96 | -30.1% |
+| SMA 50/200 | 8.9% | 0.84 | -23.7% |
+| momentum (6-month) | 8.1% | 0.91 | -14.4% |
+| ML signal only | 5.5% | 0.60 | -23.3% |
 
 **What this shows:**
-- **No alpha.** The evolved strategies did **not** beat buy & hold on return or Sharpe. They won 1 of 5 test periods (2020–21).
-- **Half the drawdown.** They did cut the maximum drawdown roughly in half (-15.5% vs -30.1%).
-- **The GA found a stable rule.** From fold 1 onward it independently converged on the same family of rules: *buy short-term dips (`zscore(10) < -0.5`), exit when volatility spikes*. That is short-term mean reversion with a volatility filter, a well-documented effect in equity indices. Rediscovering it from scratch, and keeping it stable across folds, is evidence that the search works rather than random curve-fitting.
-- **The ML signal is essentially a coin flip.** It has an out-of-sample AUC of 0.50–0.52 and was never picked into a champion rule. This is expected for daily-horizon direction prediction.
+- **No alpha.** No seed beat buy & hold on Sharpe. On average the evolved rules won 1.2 of 5 test periods, and they perform about as well as the classic baselines.
+- **Slightly smaller drawdowns.** The average is -26% vs -30%, bought with about 25% less market exposure.
+- **The search finds a real, stable pattern.** Across folds and seeds it converges on the same family of rules: *buy when price is well below its recent average (`zscore < -1.1`), exit when volatility spikes*. That is short-term mean reversion with a volatility filter, a well-documented effect.
+- **The exact thresholds are not stable.** Small data revisions or a different seed change them, and per-period results swing with them. That is why this README reports a seed range rather than one lucky run, and why the live bot needs a margin before switching strategies.
+- **The ML signal is a coin flip.** Its out-of-sample AUC is 0.50 to 0.52, and evolution never chose it. That is expected for daily direction prediction.
+- **Nothing was tuned after seeing test results.** An earlier single run showed a much better drawdown (-15.5%). The multi-seed study showed that was luck, so this table replaced it.
 
-The parameters were **not** tuned after seeing these results. Doing that would turn the test set into a training set.
+![Learning curve](docs/img/learning_curve.png)
 
 ## Paper trading loop
 
@@ -78,6 +96,8 @@ Live runs also discard today's partial bar while the market is open.
 
 ### Replay results: Jan 2025 to Sep 2026
 
+![Paper account](docs/img/paper_equity.png)
+
 | | paper account | equal-weight buy & hold |
 |---|---|---|
 | return | +31.0% | +37.1% |
@@ -94,6 +114,21 @@ In all six re-learning rounds the champion was **kept**: no challenger beat it o
 ```powershell
 schtasks /Create /TN EvoTraderDaily /TR "powershell -ExecutionPolicy Bypass -File \"C:\Projects\Claude Project\scripts\daily.ps1\"" /SC WEEKLY /D MON,TUE,WED,THU,FRI /ST 22:30
 ```
+
+## Dashboard
+
+```bash
+uv sync --extra dashboard
+uv run evotrader dashboard
+```
+
+It has four tabs:
+- **Paper account:** equity and drawdown against buy & hold, open positions and pending orders.
+- **Trade journal:** every trade with filters and the reason it was taken.
+- **Learning:** the active strategy and every re-learning decision.
+- **Research:** walk-forward curves, the seed robustness study and learning curves.
+
+Charts support hover and follow light or dark mode.
 
 ## Design principles
 
@@ -117,6 +152,8 @@ uv run evotrader paper init --start 2025-01-02   # new paper account (past date 
 uv run evotrader paper run                       # trade every day since the last run
 uv run evotrader paper status                    # equity, positions, strategy, learning log
 uv run evotrader paper journal                   # closed trades and why they happened
+uv run evotrader walkforward --seeds 5           # robustness across random seeds (~15 min)
+uv run evotrader charts                          # regenerate docs/img
 ```
 
 ## Project layout
@@ -141,7 +178,10 @@ src/evotrader/
     report.py      # Status and journal views
   backtest.py      # Execution simulation, costs, trade log
   metrics.py       # CAGR, Sharpe, Sortino, max drawdown, Calmar, ...
+  charts.py        # README charts (matplotlib)
+  dashboard.py     # Streamlit dashboard
   cli.py           # `evotrader` command
 tests/             # Offline tests on synthetic data
 reports/           # Generated walk-forward results
+docs/              # Charts and design Q&A
 ```

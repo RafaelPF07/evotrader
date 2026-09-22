@@ -24,7 +24,7 @@ from evotrader.strategies import REGISTRY, BuyAndHold
 ROOT = Path(__file__).resolve().parents[2]
 MODELS_DIR = ROOT / "models"
 REPORTS_DIR = ROOT / "reports"
-PCT =["total_return", "cagr", "volatility", "max_drawdown", "exposure", "win_rate"]
+PCT = ["total_return", "cagr", "volatility", "max_drawdown", "exposure", "win_rate"]
 
 
 def _parse_params(pairs: list[str]) -> dict[str, float | int]:
@@ -117,20 +117,64 @@ def cmd_evolve(args: argparse.Namespace) -> None:
 
 
 def cmd_walkforward(args: argparse.Namespace) -> None:
+    from dataclasses import replace
+
     from evotrader.walkforward import load_datasets, make_folds, run_walkforward, to_markdown
 
     datasets = load_datasets(args.tickers, use_ml=not args.no_ml)
     last = min(ds.bars.index[-1] for ds in datasets)
     folds = make_folds(args.start, args.first_test_year, last, test_years=args.test_years)
-    report = run_walkforward(datasets, folds, _evo_config(args))
-
-    print("\nStitched out-of-sample results:\n")
-    print(format_metrics(report.oos_metrics[["cagr", "sharpe", "max_drawdown", "exposure"]]))
-
     REPORTS_DIR.mkdir(exist_ok=True)
-    (REPORTS_DIR / "walkforward.md").write_text(to_markdown(report), encoding="utf-8")
-    report.oos_returns.to_csv(REPORTS_DIR / "walkforward_returns.csv")
+    cols = ["cagr", "sharpe", "max_drawdown", "exposure"]
+
+    # A GA run is one sample of a random process, so repeat it with several seeds and
+    # report the spread. The main report is always the first seed, never the best one.
+    per_seed, evolved_returns, history = [], {}, []
+    for seed in range(args.seed, args.seed + args.seeds):
+        print(f"\n######## seed {seed} ########")
+        report = run_walkforward(datasets, folds, replace(_evo_config(args), seed=seed))
+        if seed == args.seed:
+            first = report
+        evolved_returns[f"seed_{seed}"] = report.oos_returns["evolved"]
+        wins = sum(r.test_metrics["evolved"]["sharpe"] > r.test_metrics["buy_and_hold"]["sharpe"]
+                   for r in report.folds)
+        per_seed.append({"seed": seed, **report.oos_metrics.loc["evolved", cols].to_dict(),
+                         "folds_beating_buy_and_hold": wins})
+        history += [{"seed": seed, "fold": r.fold.index, **vars(s)}
+                    for r in report.folds for s in r.history]
+
+    seeds = pd.DataFrame(per_seed).set_index("seed")
+    print("\nStitched out-of-sample results (first seed):\n")
+    print(format_metrics(first.oos_metrics[cols]))
+    markdown = to_markdown(first)
+    if len(seeds) > 1:
+        print(f"\nEvolved strategy across {len(seeds)} seeds:\n")
+        print(format_metrics(seeds[cols].describe().loc[["mean", "std", "min", "max"]]))
+        markdown += "\n" + seed_markdown(seeds, first.oos_metrics.loc["buy_and_hold"])
+
+    (REPORTS_DIR / "walkforward.md").write_text(markdown, encoding="utf-8")
+    first.oos_returns.to_csv(REPORTS_DIR / "walkforward_returns.csv")
+    pd.DataFrame(evolved_returns).to_csv(REPORTS_DIR / "walkforward_evolved_by_seed.csv")
+    seeds.to_csv(REPORTS_DIR / "walkforward_seeds.csv")
+    pd.DataFrame(history).to_csv(REPORTS_DIR / "walkforward_history.csv", index=False)
     print(f"\nReport written to {REPORTS_DIR / 'walkforward.md'}")
+
+
+def seed_markdown(seeds: pd.DataFrame, buy_and_hold: pd.Series) -> str:
+    lines = ["## Robustness across random seeds", "",
+             f"The whole walk-forward was repeated with {len(seeds)} seeds. The tables above "
+             "show the first seed, not the best one.", "",
+             "| seed | CAGR | Sharpe | max drawdown | periods beating buy & hold |",
+             "|---|---|---|---|---|"]
+    for seed, row in seeds.iterrows():
+        lines.append(f"| {seed} | {row['cagr']:+.1%} | {row['sharpe']:.2f} | "
+                     f"{row['max_drawdown']:+.1%} | {int(row['folds_beating_buy_and_hold'])} |")
+    lines += [f"| **mean** | {seeds['cagr'].mean():+.1%} | {seeds['sharpe'].mean():.2f} | "
+              f"{seeds['max_drawdown'].mean():+.1%} | "
+              f"{seeds['folds_beating_buy_and_hold'].mean():.1f} |",
+              f"| buy & hold | {buy_and_hold['cagr']:+.1%} | {buy_and_hold['sharpe']:.2f} | "
+              f"{buy_and_hold['max_drawdown']:+.1%} | - |", ""]
+    return "\n".join(lines)
 
 
 def cmd_ml(args: argparse.Namespace) -> None:
@@ -190,6 +234,34 @@ def cmd_paper_journal(args: argparse.Namespace) -> None:
     print(journal_text(PaperStore(args.db), args.n))
 
 
+def cmd_charts(args: argparse.Namespace) -> None:
+    from evotrader import charts
+
+    out = ROOT / "docs" / "img"
+    out.mkdir(parents=True, exist_ok=True)
+    made = [charts.walkforward_chart(REPORTS_DIR, out), charts.learning_curve_chart(REPORTS_DIR,
+                                                                                    out)]
+    db = Path(args.db)
+    if db.exists():
+        from evotrader.paper.report import equity_frame
+
+        store, trader = _paper(args, refresh=False)
+        log = store.frame("SELECT date FROM learning_log")
+        made.append(charts.paper_chart(equity_frame(store, trader.bars),
+                                       list(pd.to_datetime(log["date"])), out))
+    for path in made:
+        print(f"wrote {path.relative_to(ROOT)}")
+
+
+def cmd_dashboard(args: argparse.Namespace) -> None:
+    import subprocess
+    import sys
+
+    app = Path(__file__).with_name("dashboard.py")
+    subprocess.run([sys.executable, "-m", "streamlit", "run", str(app), "--", "--db", args.db],
+                   check=False)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="evotrader")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -228,6 +300,7 @@ def main(argv: list[str] | None = None) -> None:
     wf.add_argument("--start", default="2007-01-01", help="start of every training window")
     wf.add_argument("--first-test-year", type=int, default=2016)
     wf.add_argument("--test-years", type=int, default=2)
+    wf.add_argument("--seeds", type=int, default=1, help="repeat with this many seeds")
     wf.set_defaults(func=cmd_walkforward)
 
     ml = sub.add_parser("ml", parents=[common, universe], help="ML signal diagnostics")
@@ -257,6 +330,11 @@ def main(argv: list[str] | None = None) -> None:
     p_journal = paper_sub.add_parser("journal", parents=[db], help="Closed trades and why")
     p_journal.add_argument("-n", type=int, default=10)
     p_journal.set_defaults(func=cmd_paper_journal)
+
+    ch = sub.add_parser("charts", parents=[db], help="Regenerate README charts in docs/img")
+    ch.set_defaults(func=cmd_charts)
+    dash = sub.add_parser("dashboard", parents=[db], help="Open the Streamlit dashboard")
+    dash.set_defaults(func=cmd_dashboard)
 
     args = parser.parse_args(argv)
     args.func(args)
